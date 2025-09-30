@@ -1,0 +1,30 @@
+You are a vision analyst. Given an image of a salad, determine whether each of the following ingredients is present IN THE SALAD (not just visible in the image) and provide bounding box coordinates for detected ingredients.
+
+Return ONLY valid JSON (no comments, no extra text) with the exact keys, each containing an object with:
+
+* `"present"`: boolean (true|false)
+* `"confidence"`: number between 0 and 1 (your estimated likelihood of presence)
+* `"bbox"`: array [x_min, y_min, x_max, y_max] with normalized coordinates (0-1) or null if not present
+
+INGREDIENTS = ["avocado", "lettuce", "tomato"]
+
+Rules:
+
+* Only mark ingredients as present if they are ACTUALLY IN THE SALAD PLATE/BOWL, not just visible elsewhere in the image.
+* Ingredients must be physically inside the main salad plate/bowl to be considered present.
+* If uncertain whether an ingredient is in the salad plate/bowl, set `"present": false`, `"confidence": a low value (e.g. ≤0.3)`, and `"bbox": null`.
+* Do not invent ingredients outside the list.
+* Base your decision solely on the visible image content.
+* Confidence should reflect your certainty: 0.9+ for very clear, 0.7-0.8 for clear, 0.5-0.6 for somewhat clear, 0.3-0.4 for unclear, 0.1-0.2 for very unclear.
+* Focus on ingredients that are mixed into or placed on top of the salad within the main plate/bowl, not ingredients that might be on the table or in other containers.
+* For bounding boxes: use normalized coordinates where (0,0) is top-left and (1,1) is bottom-right of the image.
+* If an ingredient is present but you cannot clearly define its bounding box, set `"bbox": null` but keep `"present": true`.
+* For multiple instances of the same ingredient, provide the bounding box of the most prominent/visible one.
+
+Respond with ONLY the JSON object (no markdown formatting, no code blocks):
+
+{
+  "avocado": {"present": <true|false>, "confidence": <0-1>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null},
+  "lettuce": {"present": <true|false>, "confidence": <0-1>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null},
+  "tomato": {"present": <true|false>, "confidence": <0-1>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null}
+}

@@ -1,0 +1,163 @@
+# Architecture Complexity Diagram
+
+## Current Architecture (ChatGPT Only)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    FilterChatgptAnnotator                   │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │   Config        │    │        OpenAI Client            │ │
+│  │ - chatgpt_model │    │ - chat.completions.create()     │ │
+│  │ - api_key       │    │ - Base64 image handling         │ │
+│  │ - prompt        │    │ - Token usage tracking          │ │
+│  └─────────────────┘    └─────────────────────────────────┘ │
+│           │                           │                     │
+│           ▼                           ▼                     │
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │ Image Processing│    │      Response Processing        │ │
+│  │ - BGR to RGB    │    │ - JSON parsing                  │ │
+│  │ - Resize        │    │ - Annotation validation         │ │
+│  │ - Base64 encode │    │ - Bbox validation               │ │
+│  └─────────────────┘    └─────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Proposed Multi-Provider Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  FilterLLMAnnotator                         │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │   Unified Config│    │      Provider Factory           │ │
+│  │ - provider      │    │ - OpenAI Provider               │ │
+│  │ - common params │    │ - Gemini Provider               │ │
+│  │ - provider configs│   │ - Nano Banana Provider         │ │
+│  └─────────────────┘    └─────────────────────────────────┘ │
+│           │                           │                     │
+│           ▼                           ▼                     │
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │ Image Processing│    │      Response Processing        │ │
+│  │ - BGR to RGB    │    │ - JSON parsing                  │ │
+│  │ - Resize        │    │ - Annotation validation         │ │
+│  │ - Format adapt  │    │ - Bbox validation               │ │
+│  └─────────────────┘    └─────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Provider-Specific Implementations
+
+### OpenAI Provider
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    OpenAI Provider                          │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │   OpenAI Client │    │      Request Format             │ │
+│  │ - API Key auth  │    │ - chat.completions.create()     │ │
+│  │ - Rate limiting │    │ - Base64 inline images          │ │
+│  │ - Token tracking│    │ - Message format                │ │
+│  └─────────────────┘    └─────────────────────────────────┘ │
+│           │                           │                     │
+│           ▼                           ▼                     │
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │  Response Format│    │      Error Handling             │ │
+│  │ - choices[0]    │    │ - API errors                    │ │
+│  │ - usage tokens  │    │ - Rate limit handling           │ │
+│  │ - content       │    │ - Retry logic                   │ │
+│  └─────────────────┘    └─────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Gemini Provider
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Gemini Provider                          │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │   Gemini Client │    │      Request Format             │ │
+│  │ - OAuth2 auth   │    │ - generateContent()             │ │
+│  │ - API Key auth  │    │ - inline_data format            │ │
+│  │ - Request limits│    │ - Parts structure               │ │
+│  └─────────────────┘    └─────────────────────────────────┘ │
+│           │                           │                     │
+│           ▼                           ▼                     │
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │  Response Format│    │      Error Handling             │ │
+│  │ - candidates[0] │    │ - OAuth errors                  │ │
+│  │ - usage metadata│    │ - Request limit handling        │ │
+│  │ - content       │    │ - Retry logic                   │ │
+│  └─────────────────┘    └─────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Nano Banana Provider
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  Nano Banana Provider                       │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │   Custom Client │    │      Request Format             │ │
+│  │ - Custom headers│    │ - REST endpoint                 │ │
+│  │ - API Key auth  │    │ - Multipart form-data           │ │
+│  │ - Custom limits │    │ - Custom JSON format            │ │
+│  └─────────────────┘    └─────────────────────────────────┘ │
+│           │                           │                     │
+│           ▼                           ▼                     │
+│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
+│  │  Response Format│    │      Error Handling             │ │
+│  │ - Custom JSON   │    │ - Custom error codes            │ │
+│  │ - Custom usage  │    │ - Custom retry logic            │ │
+│  │ - Custom content│    │ - Custom rate limiting          │ │
+│  └─────────────────┘    └─────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Complexity Comparison
+
+### Current (Single Provider)
+- **Files to modify:** 1 main file
+- **API knowledge required:** OpenAI only
+- **Testing scope:** Single provider
+- **Maintenance:** Low complexity
+
+### Multi-Provider (Proposed)
+- **Files to modify:** 4+ files
+- **API knowledge required:** 3 different APIs
+- **Testing scope:** 3 providers + integration
+- **Maintenance:** High complexity
+
+## Key Differences Summary
+
+| Aspect | OpenAI | Gemini | Nano Banana |
+|--------|--------|--------|-------------|
+| **Auth** | Simple API Key | OAuth2 + API Key | Custom headers |
+| **Request** | chat.completions | generateContent | Custom REST |
+| **Images** | Base64 inline | Base64 inline | Multipart form |
+| **Response** | choices[0].content | candidates[0].content | Custom JSON |
+| **Rate Limits** | Tokens/min | Requests/min | Custom |
+| **Error Handling** | Standard HTTP | OAuth + HTTP | Custom codes |
+| **Documentation** | Excellent | Good | Limited |
+
+## Implementation Phases
+
+### Phase 1: Architecture Refactoring
+```
+Current → Abstract Provider Interface → Unified Config
+```
+
+### Phase 2: Provider Implementation
+```
+OpenAI Provider → Gemini Provider → Nano Banana Provider
+```
+
+### Phase 3: Integration & Testing
+```
+Unit Tests → Integration Tests → End-to-End Tests
+```
+
+### Phase 4: Documentation & Examples
+```
+API Docs → Usage Examples → Migration Guide
+```

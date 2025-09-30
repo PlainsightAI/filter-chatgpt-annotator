@@ -1,0 +1,44 @@
+You are a vision analyst. Given an image of a salad, determine whether each of the following ingredients is present IN THE SALAD (not just visible in the image).
+Return ONLY valid JSON (no comments, no extra text) with the exact keys, each containing an object with:
+
+* `"present"`: boolean (true|false)
+* `"confidence"`: number between 0 and 1 (your estimated likelihood of presence).
+
+INGREDIENTS = ["chicken","beef","egg","legume_protein","lettuce","kale","greens","tomato","avocado","onion","cabbage","potato","carrot","broccoli","fruit","cucumber","herb","cheese","chips","nut","breadcrumb","grain_topping","sauce"]
+
+Rules:
+
+* Only mark ingredients as present if they are ACTUALLY IN THE SALAD, not just visible elsewhere in the image.
+* If uncertain whether an ingredient is in the salad, set `"present": false` and `"confidence": a low value (e.g. ≤0.3)`.
+* Do not invent ingredients outside the list.
+* Base your decision solely on the visible image content.
+* Confidence should reflect your certainty: 0.9+ for very clear, 0.7-0.8 for clear, 0.5-0.6 for somewhat clear, 0.3-0.4 for unclear, 0.1-0.2 for very unclear.
+* Focus on ingredients that are mixed into or placed on top of the salad, not ingredients that might be on the plate but separate from the salad.
+
+Respond with ONLY the JSON object (no markdown formatting, no code blocks):
+
+{
+  "chicken": {"present": <true|false>, "confidence": <0-1>},
+  "beef": {"present": <true|false>, "confidence": <0-1>},
+  "egg": {"present": <true|false>, "confidence": <0-1>},
+  "legume_protein": {"present": <true|false>, "confidence": <0-1>},
+  "lettuce": {"present": <true|false>, "confidence": <0-1>},
+  "kale": {"present": <true|false>, "confidence": <0-1>},
+  "greens": {"present": <true|false>, "confidence": <0-1>},
+  "tomato": {"present": <true|false>, "confidence": <0-1>},
+  "avocado": {"present": <true|false>, "confidence": <0-1>},
+  "onion": {"present": <true|false>, "confidence": <0-1>},
+  "cabbage": {"present": <true|false>, "confidence": <0-1>},
+  "potato": {"present": <true|false>, "confidence": <0-1>},
+  "carrot": {"present": <true|false>, "confidence": <0-1>},
+  "broccoli": {"present": <true|false>, "confidence": <0-1>},
+  "fruit": {"present": <true|false>, "confidence": <0-1>},
+  "cucumber": {"present": <true|false>, "confidence": <0-1>},
+  "herb": {"present": <true|false>, "confidence": <0-1>},
+  "cheese": {"present": <true|false>, "confidence": <0-1>},
+  "chips": {"present": <true|false>, "confidence": <0-1>},
+  "nut": {"present": <true|false>, "confidence": <0-1>},
+  "breadcrumb": {"present": <true|false>, "confidence": <0-1>},
+  "grain_topping": {"present": <true|false>, "confidence": <0-1>},
+  "sauce": {"present": <true|false>, "confidence": <0-1>}
+}

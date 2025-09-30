@@ -1,0 +1,12 @@
+[model1]
+version = 'v0.1.2'
+type = 'hf'
+name = 'facebook/detr-resnet-50'
+[model2]
+version = 'v0.1.0'
+type = 'custom'
+path = '/home/plainsight/model inference/model.pth'
+[checkpoint]
+version = 'v0.1.1'
+type = 'custom'
+path = '$HOME/.cache/torch/hub/checkpoints/resnet50-0676ba61.pth'

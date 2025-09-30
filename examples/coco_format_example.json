@@ -1,0 +1,75 @@
+{
+  "info": {
+    "description": "ChatGPT Annotator Detection Dataset",
+    "version": "1.0",
+    "year": 2024,
+    "contributor": "ChatGPT Annotator Filter",
+    "date_created": "2024-01-15 10:30:00"
+  },
+  "licenses": [
+    {
+      "id": 1,
+      "name": "Unknown",
+      "url": ""
+    }
+  ],
+  "images": [
+    {
+      "id": 1,
+      "width": 640,
+      "height": 480,
+      "file_name": "0_1758120180392.jpg",
+      "license": 1,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": 0
+    },
+    {
+      "id": 2,
+      "width": 640,
+      "height": 480,
+      "file_name": "1_1758120190092.jpg",
+      "license": 1,
+      "flickr_url": "",
+      "coco_url": "",
+      "date_captured": 0
+    }
+  ],
+  "annotations": [
+    {
+      "id": 1,
+      "image_id": 1,
+      "category_id": 1,
+      "segmentation": [],
+      "area": 10240.0,
+      "bbox": [128.0, 96.0, 160.0, 64.0],
+      "iscrowd": 0
+    },
+    {
+      "id": 2,
+      "image_id": 2,
+      "category_id": 2,
+      "segmentation": [],
+      "area": 15360.0,
+      "bbox": [192.0, 144.0, 120.0, 128.0],
+      "iscrowd": 0
+    }
+  ],
+  "categories": [
+    {
+      "id": 1,
+      "name": "avocado",
+      "supercategory": "object"
+    },
+    {
+      "id": 2,
+      "name": "lettuce",
+      "supercategory": "object"
+    },
+    {
+      "id": 3,
+      "name": "tomato",
+      "supercategory": "object"
+    }
+  ]
+}
