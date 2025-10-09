@@ -96,6 +96,10 @@ class FilterChatgptAnnotator(Filter):
     - Support for diverse datasets (any domain with image classification needs)
     - Optional frame persistence for auditing/debugging
     - Topic forwarding for pipeline compatibility
+    - Automatic dataset generation:
+      * Binary classification datasets (always generated)
+      * Object detection datasets in COCO format (when bbox schema present)
+      * Multilabel COCO datasets with full-image bounding boxes (when bbox schema present)
     """
 
     @classmethod
@@ -1252,6 +1256,171 @@ class FilterChatgptAnnotator(Filter):
         except Exception as e:
             logger.error(f"Failed to generate detection datasets: {str(e)}")
 
+    def _generate_multilabel_coco_datasets(self):
+        """
+        Generate multilabel COCO datasets from saved JSONL file.
+        Creates datasets where each present label gets a bounding box covering the entire image.
+        This is useful for multilabel classification tasks that need COCO format.
+        """
+        try:
+            logger.info("Generating multilabel COCO datasets...")
+            
+            # Read JSONL file
+            jsonl_file = self.output_dir / "labels.jsonl"
+            if not jsonl_file.exists():
+                logger.warning("No labels.jsonl file found in output directory")
+                return
+            
+            # Read all records from JSONL
+            records = []
+            with open(jsonl_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.strip():
+                        records.append(json.loads(line.strip()))
+            
+            if not records:
+                logger.warning("No records found in JSONL file")
+                return
+            
+            # Get labels from all records
+            labels = set()
+            for record in records:
+                labels.update(record["labels"].keys())
+            
+            if not labels:
+                logger.warning("No labels found in records")
+                return
+            
+            # Create multilabel datasets directory
+            multilabel_datasets_dir = self.output_dir / "multilabel_datasets"
+            multilabel_datasets_dir.mkdir(exist_ok=True)
+            
+            # Initialize COCO format structure
+            coco_dataset = {
+                "info": {
+                    "description": "ChatGPT Annotator Multilabel Dataset",
+                    "version": "1.0",
+                    "year": 2024,
+                    "contributor": "ChatGPT Annotator Filter",
+                    "date_created": time.strftime("%Y-%m-%d %H:%M:%S")
+                },
+                "licenses": [
+                    {
+                        "id": 1,
+                        "name": "Unknown",
+                        "url": ""
+                    }
+                ],
+                "images": [],
+                "annotations": [],
+                "categories": []
+            }
+            
+            # Create categories
+            for idx, label in enumerate(sorted(labels), 1):
+                coco_dataset["categories"].append({
+                    "id": idx,
+                    "name": label,
+                    "supercategory": "object"
+                })
+            
+            # Create category mapping
+            category_mapping = {label: idx for idx, label in enumerate(sorted(labels), 1)}
+            
+            # Process each record
+            annotation_id = 1
+            for image_id, record in enumerate(records, 1):
+                # Extract image information
+                image_path = record["image"]
+                filename = os.path.basename(image_path)
+                
+                # Get image dimensions (we'll need to read the actual image)
+                try:
+                    import cv2
+                    full_image_path = self.output_dir / image_path
+                    if full_image_path.exists():
+                        img = cv2.imread(str(full_image_path))
+                        if img is not None:
+                            height, width = img.shape[:2]
+                        else:
+                            # Fallback dimensions if image can't be read
+                            width, height = 640, 480
+                    else:
+                        # Fallback dimensions if image doesn't exist
+                        width, height = 640, 480
+                except Exception as e:
+                    logger.warning(f"Could not read image dimensions for {filename}: {e}")
+                    width, height = 640, 480
+                
+                # Add image to COCO dataset
+                coco_dataset["images"].append({
+                    "id": image_id,
+                    "width": width,
+                    "height": height,
+                    "file_name": filename,
+                    "license": 1,
+                    "flickr_url": "",
+                    "coco_url": "",
+                    "date_captured": 0
+                })
+                
+                # Process annotations for this image - create full image bbox for each present label
+                for label_name, label_data in record["labels"].items():
+                    if (label_data.get('present', False) and 
+                        label_data.get('confidence', 0.0) >= self.confidence_threshold):
+                        
+                        # Create bounding box that covers the entire image
+                        # COCO format: [x, y, width, height] (top-left corner + width/height)
+                        bbox = [0, 0, width, height]  # Full image bbox
+                        area = width * height
+                        
+                        # Add annotation to COCO dataset
+                        coco_dataset["annotations"].append({
+                            "id": annotation_id,
+                            "image_id": image_id,
+                            "category_id": category_mapping[label_name],
+                            "segmentation": [],
+                            "area": area,
+                            "bbox": bbox,
+                            "iscrowd": 0
+                        })
+                        
+                        annotation_id += 1
+            
+            # Save COCO dataset
+            coco_file = multilabel_datasets_dir / "annotations.json"
+            with open(coco_file, 'w', encoding='utf-8') as f:
+                json.dump(coco_dataset, f, indent=2, ensure_ascii=False)
+            
+            # Generate summary report
+            summary = {
+                "task_type": "multilabel_classification",
+                "format": "COCO",
+                "total_classes": len(labels),
+                "classes": sorted(list(labels)),
+                "category_mapping": category_mapping,
+                "total_images": len(records),
+                "total_annotations": annotation_id - 1,
+                "output_directory": str(multilabel_datasets_dir),
+                "confidence_threshold": self.confidence_threshold,
+                "coco_file": str(coco_file),
+                "bbox_type": "full_image_bbox",
+                "description": "Each present label gets a bounding box covering the entire image",
+                "generated_at": time.time()
+            }
+            
+            summary_file = multilabel_datasets_dir / "_summary_report.json"
+            with open(summary_file, 'w', encoding='utf-8') as f:
+                json.dump(summary, f, indent=2, ensure_ascii=False)
+            
+            logger.info(f"Multilabel COCO dataset generated successfully in: {multilabel_datasets_dir}")
+            logger.info(f"COCO annotations file: {coco_file}")
+            logger.info(f"Summary report: {summary_file}")
+            logger.info(f"Total images: {len(records)}, Total annotations: {annotation_id - 1}")
+            
+        except Exception as e:
+            logger.error(f"Failed to generate multilabel COCO datasets: {str(e)}")
+
     def shutdown(self):
         """
         Called once when the filter is shutting down.
@@ -1267,6 +1436,8 @@ class FilterChatgptAnnotator(Filter):
             # Generate detection datasets only if bbox schema is present
             if self.has_bbox_schema:
                 self._generate_detection_datasets()
+                # Also generate multilabel COCO datasets (full image bbox for each present label)
+                self._generate_multilabel_coco_datasets()
         
         # Clean up resources
         self.client = None
