@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
 """
-Example script for running avocado and fish annotation with bounding boxes using FilterChatgptAnnotator.
+Example script for running avocado, fish and chicken annotation with bounding boxes using FilterChatgptAnnotator.
 
-This script demonstrates how to use the FilterChatgptAnnotator with avocado and fish annotation
+This script demonstrates how to use the FilterChatgptAnnotator with avocado, fish and chicken annotation
 prompts that include bounding box coordinates for object detection tasks.
 
 Required environment variables in .env file:
@@ -82,7 +82,7 @@ if __name__ == '__main__':
     Filter.run_multi([
         input_source,
         (FilterChatgptAnnotator, FilterChatgptAnnotatorConfig(
-            id="filter_chatgpt_avocado_fish_bb",
+            id="filter_chatgpt_avocado_fish_chicken_bb",
             sources="tcp://localhost:5550",
             outputs="tcp://*:5552",
             chatgpt_api_key=api_key,
@@ -90,11 +90,12 @@ if __name__ == '__main__':
             # Task type is auto-detected based on bbox presence in output_schema
             # FILTER_MAX_IMAGE_SIZE=512, # Resize image to 512px
             # output_dir=os.getenv('FILTER_OUTPUT_DIR', './output_frames'),
-            confidence_threshold=float(os.getenv('FILTER_CONFIDENCE_THRESHOLD', '0.7')),
-            # Set output schema for avocado and fish with bounding boxes
+            confidence_threshold=float(os.getenv('FILTER_CONFIDENCE_THRESHOLD', '0.9')),
+            # Set output schema for avocado, fish and chicken with bounding boxes
             output_schema={
                 "avocado": {"present": False, "confidence": 0.0, "bbox": None},
                 "fish": {"present": False, "confidence": 0.0, "bbox": None},
+                "chicken": {"present": False, "confidence": 0.0, "bbox": None},
             }
         )),
         (Webvis, dict(

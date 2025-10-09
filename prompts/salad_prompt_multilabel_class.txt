@@ -6,7 +6,7 @@ Return ONLY valid JSON (no comments, no extra text) with the exact keys, each co
 * `"confidence"`: number between 0 and 1 (your estimated likelihood of presence)
 * `"bbox"`: array [x_min, y_min, x_max, y_max] with normalized coordinates (0-1) or null if not present
 
-INGREDIENTS = ["avocado", "fish"]
+INGREDIENTS = ["avocado", "fish", "chicken"]
 
 Rules:
 
@@ -28,5 +28,6 @@ Respond with ONLY the JSON object (no markdown formatting, no code blocks):
 
 {
   "avocado": {"present": <true|false>, "confidence": <0-1>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null},
-  "fish": {"present": <true|false>, "confidence": <0-1>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null}
+  "fish": {"present": <true|false>, "confidence": <0-1>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null},
+  "chicken": {"present": <true|false>, "confidence": <0-1>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null}
 }
