@@ -10,7 +10,8 @@ INGREDIENTS = ["avocado", "fish", "chicken"]
 
 Rules:
 
-* Mark ingredients as present if they are visible anywhere in the image.
+* Mark ingredients as present if they are visible inside a bowl/container in the image.
+* Only ONE protein will be present per image: either chicken OR fish, never both.
 * If uncertain whether an ingredient is present, set `"present": false`, `"confidence": a low value (e.g. ≤0.3)`, and `"bbox": null`.
 * Do not invent ingredients outside the list.
 * Base your decision solely on the visible image content.

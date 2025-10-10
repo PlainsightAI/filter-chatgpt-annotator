@@ -85,14 +85,14 @@ def draw_labels_on_image(image, labels):
     """Draw only PRESENT classification labels on image with colors."""
     height, width = image.shape[:2]
     
-    # Text settings
+    # Text settings - make proportional to image size
     font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.8
-    thickness = 2
+    font_scale = max(0.5, min(2.0, width / 400))  # Scale between 0.5 and 2.0 based on image width
+    thickness = max(1, int(width / 300))  # Thickness proportional to image width
     
-    # Position for labels
-    y_offset = 40
-    x_offset = 20
+    # Position for labels - proportional to image size
+    y_offset = int(height * 0.05)  # 5% of image height
+    x_offset = int(width * 0.02)   # 2% of image width
     
     # Get only present labels
     present_labels = []
@@ -106,8 +106,9 @@ def draw_labels_on_image(image, labels):
         text = "No objects detected"
         color = (128, 128, 128)  # Gray
         (text_width, text_height), _ = cv2.getTextSize(text, font, font_scale, thickness)
-        cv2.rectangle(image, (x_offset - 5, y_offset - text_height - 5), 
-                     (x_offset + text_width + 5, y_offset + 5), (0, 0, 0), -1)
+        padding = max(5, int(width * 0.01))  # Padding proportional to image width
+        cv2.rectangle(image, (x_offset - padding, y_offset - text_height - padding), 
+                     (x_offset + text_width + padding, y_offset + padding), (0, 0, 0), -1)
         cv2.putText(image, text, (x_offset, y_offset), font, font_scale, color, thickness)
         return image
     
@@ -121,10 +122,11 @@ def draw_labels_on_image(image, labels):
         
         # Draw text with background
         (text_width, text_height), _ = cv2.getTextSize(text, font, font_scale, thickness)
-        cv2.rectangle(image, (x_offset - 5, y_offset - text_height - 5), 
-                     (x_offset + text_width + 5, y_offset + 5), (0, 0, 0), -1)
+        padding = max(5, int(width * 0.01))  # Padding proportional to image width
+        cv2.rectangle(image, (x_offset - padding, y_offset - text_height - padding), 
+                     (x_offset + text_width + padding, y_offset + padding), (0, 0, 0), -1)
         cv2.putText(image, text, (x_offset, y_offset), font, font_scale, color, thickness)
-        y_offset += 35
+        y_offset += int(height * 0.08)  # 8% of image height between labels
     
     return image
 

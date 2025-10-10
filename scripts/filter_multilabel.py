@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
     # Use VideoIn for video processing
     input_source = (VideoIn, dict(
-        sources=f'file://{video_path}!resize=960x540!sync!no-loop;main',  # Process video once, no loop, topic: main, sync
+        sources=f'file://{video_path}!sync!no-loop;main',  # Process video once, no loop, topic: main, sync
         outputs='tcp://*:5550',
     ))
     print(f"Using VideoIn with path: {video_path} (no loop, sync)")
@@ -87,8 +87,11 @@ if __name__ == '__main__':
             outputs="tcp://*:5552",
             chatgpt_api_key=api_key,
             prompt=prompt_path,
+            # HIGH QUALITY SETTINGS - Maximum quality for ChatGPT Vision API
+            max_image_size=0,  # Keep original size (no downscaling)
+            image_quality=98,  # Maximum JPEG quality (98% for best results)
+            preserve_original_format=True,  # Preserve original format when possible
             # Task type is auto-detected based on bbox presence in output_schema
-            # FILTER_MAX_IMAGE_SIZE=512, # Resize image to 512px
             # output_dir=os.getenv('FILTER_OUTPUT_DIR', './output_frames'),
             confidence_threshold=float(os.getenv('FILTER_CONFIDENCE_THRESHOLD', '0.9')),
             # Set output schema for avocado, fish and chicken with bounding boxes

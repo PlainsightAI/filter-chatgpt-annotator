@@ -270,6 +270,8 @@ class FilterChatgptAnnotator(Filter):
         try:
             with open(config.prompt, 'r', encoding='utf-8') as f:
                 self.prompt_text = f.read().strip()
+            # Store prompt filename for metadata
+            self.prompt_filename = os.path.basename(config.prompt)
             logger.debug(f"Loaded prompt from: {config.prompt}")
         except Exception as e:
             raise RuntimeError(f"Failed to load prompt file: {str(e)}")
@@ -813,7 +815,8 @@ class FilterChatgptAnnotator(Filter):
             dataset_entry = {
                 "image": image_path or f"{frame_id}.jpg",
                 "labels": results.get("annotations", {}),
-                "usage": results.get("usage", {})
+                "usage": results.get("usage", {}),
+                "prompt_used": getattr(self, 'prompt_filename', 'unknown')
             }
             
             # Save as JSONL (one line per entry)
