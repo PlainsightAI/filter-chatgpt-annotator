@@ -65,10 +65,10 @@ def draw_bboxes_on_image(image, labels):
     """Draw bounding boxes and labels on image"""
     height, width = image.shape[:2]
     
-    # Text settings
+    # Text settings - make proportional to image size
     font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = 0.6
-    thickness = 2
+    font_scale = max(0.4, min(1.5, width / 500))  # Scale between 0.4 and 1.5 based on image width
+    thickness = max(1, int(width / 400))  # Thickness proportional to image width
     
     # Colors for different classes (BGR format)
     colors = [
@@ -107,8 +107,9 @@ def draw_bboxes_on_image(image, labels):
             color = colors[color_index % len(colors)]
             color_index += 1
             
-            # Draw bounding box
-            cv2.rectangle(image, (x_min, y_min), (x_max, y_max), color, 2)
+            # Draw bounding box with proportional thickness
+            bbox_thickness = max(1, int(width / 300))  # Bounding box thickness proportional to image width
+            cv2.rectangle(image, (x_min, y_min), (x_max, y_max), color, bbox_thickness)
             
             # Prepare label text
             label_text = f"{label_name} ({confidence:.2f})"
@@ -116,12 +117,14 @@ def draw_bboxes_on_image(image, labels):
             # Get text size for background
             (text_width, text_height), _ = cv2.getTextSize(label_text, font, font_scale, thickness)
             
-            # Draw background rectangle for text
-            cv2.rectangle(image, (x_min, y_min - text_height - 10), 
-                         (x_min + text_width + 10, y_min), color, -1)
+            # Draw background rectangle for text with proportional padding
+            padding = max(5, int(width * 0.01))  # Padding proportional to image width
+            cv2.rectangle(image, (x_min, y_min - text_height - padding), 
+                         (x_min + text_width + padding, y_min), color, -1)
             
-            # Draw text
-            cv2.putText(image, label_text, (x_min + 5, y_min - 5), 
+            # Draw text with proportional offset
+            text_offset = max(3, int(width * 0.005))  # Text offset proportional to image width
+            cv2.putText(image, label_text, (x_min + text_offset, y_min - text_offset), 
                        font, font_scale, (255, 255, 255), thickness)
     
     return image
