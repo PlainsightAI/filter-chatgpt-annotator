@@ -29,6 +29,44 @@ def extract_image_info(image_path):
     return filename, 640, 480
 
 
+def analyze_confidence_distribution(labels_data):
+    """Analyze confidence distribution to suggest optimal threshold."""
+    confidence_scores = []
+    present_objects = []
+    
+    for item in labels_data:
+        for class_name, label_info in item['labels'].items():
+            confidence = label_info['confidence']
+            confidence_scores.append(confidence)
+            if label_info['present']:
+                present_objects.append(confidence)
+    
+    if not present_objects:
+        return 0.5, "No present objects found"
+    
+    # Calculate statistics
+    present_objects.sort()
+    n = len(present_objects)
+    
+    # Suggest thresholds
+    thresholds = {
+        "0.5": len([c for c in present_objects if c >= 0.5]),
+        "0.6": len([c for c in present_objects if c >= 0.6]),
+        "0.7": len([c for c in present_objects if c >= 0.7]),
+        "0.8": len([c for c in present_objects if c >= 0.8]),
+        "0.9": len([c for c in present_objects if c >= 0.9])
+    }
+    
+    # Find optimal threshold (include most objects while filtering noise)
+    optimal_threshold = 0.7
+    for threshold, count in thresholds.items():
+        if count >= n * 0.8:  # Include at least 80% of present objects
+            optimal_threshold = float(threshold)
+            break
+    
+    return optimal_threshold, f"Found {n} present objects. Suggested threshold: {optimal_threshold}"
+
+
 def generate_multilabel_dataset(labels_data, output_dir, confidence_threshold=0.9):
     """Generate multilabel dataset in COCO format from labels.jsonl data."""
     
@@ -151,12 +189,17 @@ def generate_multilabel_dataset(labels_data, output_dir, confidence_threshold=0.
 
 def main():
     """Main function to process directories."""
-    if len(sys.argv) < 2:
-        print("Usage: python generate_multilabel_from_labels.py <directory1> [directory2] ...")
-        print("Example: python generate_multilabel_from_labels.py output_frames_mult_bow_crop_v1 output_frames_mult_bow_crop_v2")
-        sys.exit(1)
+    import argparse
     
-    directories = sys.argv[1:]
+    parser = argparse.ArgumentParser(description='Generate multilabel datasets from existing labels.jsonl files')
+    parser.add_argument('directories', nargs='+', help='Directories containing labels.jsonl files')
+    parser.add_argument('--confidence', '-c', type=float, default=0.7, 
+                       help='Confidence threshold for filtering labels (default: 0.7)')
+    
+    args = parser.parse_args()
+    
+    directories = args.directories
+    confidence_threshold = args.confidence
     
     for directory in directories:
         labels_file = os.path.join(directory, "labels.jsonl")
@@ -167,13 +210,23 @@ def main():
             continue
         
         print(f"\nProcessing {directory}...")
+        print(f"Using confidence threshold: {confidence_threshold}")
         
         # Load labels
         labels_data = load_labels_jsonl(labels_file)
         print(f"Loaded {len(labels_data)} labels from {labels_file}")
         
+        # Analyze confidence distribution
+        optimal_threshold, analysis_msg = analyze_confidence_distribution(labels_data)
+        print(f"Confidence analysis: {analysis_msg}")
+        
+        # Use optimal threshold if user didn't specify one
+        if confidence_threshold == 0.7:  # Default value
+            confidence_threshold = optimal_threshold
+            print(f"Using optimal threshold: {confidence_threshold}")
+        
         # Generate multilabel dataset
-        summary = generate_multilabel_dataset(labels_data, multilabel_dir)
+        summary = generate_multilabel_dataset(labels_data, multilabel_dir, confidence_threshold)
         
         print(f"✓ Completed {directory}")
 
