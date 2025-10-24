@@ -6,7 +6,7 @@ Return ONLY valid JSON (no comments, no extra text) with the exact keys, each co
 * `"confidence"`: number between 0 and 1 (your estimated likelihood of presence)
 * `"bbox"`: array [x_min, y_min, x_max, y_max] with normalized coordinates (0-1) or null if not present
 
-INGREDIENTS = ["avocado", "boiled eggs", "fish"]
+INGREDIENTS = ["avocado", "fish"]
 
 Rules:
 
@@ -35,7 +35,6 @@ Rules:
 Definitions & inclusions:
 
 * **avocado:** green avocado flesh as slices, chunks, cubes, or fan; guacamole only if identifiable avocado chunks are visible (pure sauce without chunks → not present).
-* **boiled eggs:** hard-boiled or soft-boiled eggs; includes whole eggs, halves, quarters, or sliced. Egg salad or deviled eggs count if distinct egg pieces are visible. Raw eggs or fried/scrambled eggs do not count.
 * **fish:** cooked or raw fish meat (e.g., salmon, tuna, white fish) as fillets, slices, cubes, flakes. Exclude shellfish (shrimp, crab), fish-shaped decorations, caviar/roe, or seaweed.
 
 Edge cases to handle explicitly:
@@ -50,6 +49,5 @@ Respond with ONLY the JSON object (no markdown formatting, no code blocks):
 
 {
   "avocado": {"present": <true|false>, "confidence": <0-1>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null},
-  "boiled eggs": {"present": <true|false>, "confidence": <0-1>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null},
   "fish": {"present": <true|false>, "confidence": <0-1>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null}
 }

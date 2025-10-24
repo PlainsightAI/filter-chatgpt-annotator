@@ -95,10 +95,9 @@ if __name__ == '__main__':
             # Task type is auto-detected based on bbox presence in output_schema
             # output_dir=os.getenv('FILTER_OUTPUT_DIR', './output_frames'),
             confidence_threshold=float(os.getenv('FILTER_CONFIDENCE_THRESHOLD', '0.7')),
-            # Set output schema for avocado, boiled eggs and fish with bounding boxes
+            # Set output schema for avocado and fish with bounding boxes
             output_schema={
                 "avocado": {"present": False, "confidence": 0.0, "bbox": None},
-                "boiled eggs": {"present": False, "confidence": 0.0, "bbox": None},
                 "fish": {"present": False, "confidence": 0.0, "bbox": None},
             }
         )),
