@@ -1441,6 +1441,12 @@ class FilterChatgptAnnotator(Filter):
                 self._generate_detection_datasets()
                 # Also generate multilabel COCO datasets (full image bbox for each present label)
                 self._generate_multilabel_coco_datasets()
+            
+            # ALWAYS generate multilabel datasets when there are multiple classes
+            # This ensures multilabel datasets are created regardless of bbox schema
+            if self.output_schema and len(self.output_schema) > 1:
+                logger.info("Multiple classes detected - generating multilabel datasets...")
+                self._generate_multilabel_coco_datasets()
         
         # Clean up resources
         self.client = None

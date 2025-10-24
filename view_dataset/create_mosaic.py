@@ -34,26 +34,34 @@ def load_labels_jsonl(labels_file_path):
 
 def get_image_path(image_path, base_dir):
     """Get absolute path of image"""
-    if not os.path.isabs(image_path):
-        # Handle different path formats
-        if image_path.startswith('output_frames/'):
-            # Remove 'output_frames/' prefix (length 14)
-            image_path = image_path[14:]
-        elif image_path.startswith('./output_frames/'):
-            # Remove './output_frames/' prefix
-            image_path = image_path[16:]
-        
-        # Remove leading slash if it exists
-        if image_path.startswith('/'):
-            image_path = image_path[1:]
-        
+    # Handle different path formats
+    if image_path.startswith('/output_frames/'):
+        # Remove '/output_frames/' prefix and use base_dir
+        image_path = image_path[15:]  # Remove '/output_frames/' (15 chars)
         # If the path starts with 'data/', remove it since base_dir already points to data directory
         if image_path.startswith('data/'):
             image_path = image_path[5:]  # Remove 'data/' prefix
-        
-        # Join with base_dir
         return os.path.join(base_dir, image_path)
-    return image_path
+    elif image_path.startswith('output_frames/'):
+        # Remove 'output_frames/' prefix (length 14)
+        image_path = image_path[14:]
+        # If the path starts with 'data/', remove it since base_dir already points to data directory
+        if image_path.startswith('data/'):
+            image_path = image_path[5:]  # Remove 'data/' prefix
+        return os.path.join(base_dir, image_path)
+    elif image_path.startswith('./output_frames/'):
+        # Remove './output_frames/' prefix
+        image_path = image_path[16:]
+        # If the path starts with 'data/', remove it since base_dir already points to data directory
+        if image_path.startswith('data/'):
+            image_path = image_path[5:]  # Remove 'data/' prefix
+        return os.path.join(base_dir, image_path)
+    elif os.path.isabs(image_path):
+        # Already absolute path
+        return image_path
+    else:
+        # Relative path - join with base_dir
+        return os.path.join(base_dir, image_path)
 
 def draw_labels_on_image(image, labels):
     """Draw only PRESENT classification labels on image with colors."""
