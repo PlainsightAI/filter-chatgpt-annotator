@@ -87,8 +87,8 @@ def draw_labels_on_image(image, labels):
     
     # Text settings - make proportional to image size
     font = cv2.FONT_HERSHEY_SIMPLEX
-    font_scale = max(0.5, min(2.0, width / 400))  # Scale between 0.5 and 2.0 based on image width
-    thickness = max(1, int(width / 300))  # Thickness proportional to image width
+    font_scale = max(1.0, min(4.0, width / 200))  # Scale between 1.0 and 4.0 based on image width
+    thickness = max(2, int(width / 200))  # Thickness proportional to image width
     
     # Position for labels - proportional to image size
     y_offset = int(height * 0.05)  # 5% of image height
@@ -228,19 +228,28 @@ def show_images_with_multilabel(annotations_file_path=None, images_dir_path=None
         info_text = f"Image {current_index+1}/{len(data)} - {os.path.basename(image_path)}"
         nav_text = "< > ^ v or A/D to navigate, ESC to exit"
         
+        # Get image dimensions for proportional text sizing
+        height, width = image_with_labels.shape[:2]
+        
         # Draw background rectangles for better text visibility
         info_y = image_with_labels.shape[0] - 60
         nav_y = image_with_labels.shape[0] - 20
         
+        # Calculate proportional font sizes for info and navigation text
+        info_font_scale = max(0.8, min(2.0, width / 300))
+        nav_font_scale = max(0.6, min(1.5, width / 400))
+        info_thickness = max(2, int(width / 250))
+        nav_thickness = max(2, int(width / 300))
+        
         # Background for info text
-        (info_w, info_h), _ = cv2.getTextSize(info_text, cv2.FONT_HERSHEY_SIMPLEX, 0.8, 2)
+        (info_w, info_h), _ = cv2.getTextSize(info_text, cv2.FONT_HERSHEY_SIMPLEX, info_font_scale, info_thickness)
         cv2.rectangle(image_with_labels, (15, info_y - info_h - 5), 
                      (25 + info_w, info_y + 5), (0, 0, 0), -1)
         cv2.rectangle(image_with_labels, (15, info_y - info_h - 5), 
                      (25 + info_w, info_y + 5), (255, 255, 255), 2)
         
         # Background for navigation text
-        (nav_w, nav_h), _ = cv2.getTextSize(nav_text, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+        (nav_w, nav_h), _ = cv2.getTextSize(nav_text, cv2.FONT_HERSHEY_SIMPLEX, nav_font_scale, nav_thickness)
         cv2.rectangle(image_with_labels, (15, nav_y - nav_h - 5), 
                      (25 + nav_w, nav_y + 5), (0, 0, 0), -1)
         cv2.rectangle(image_with_labels, (15, nav_y - nav_h - 5), 
@@ -248,9 +257,9 @@ def show_images_with_multilabel(annotations_file_path=None, images_dir_path=None
         
         # Draw text with better contrast
         cv2.putText(image_with_labels, info_text, (20, info_y), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+                   cv2.FONT_HERSHEY_SIMPLEX, info_font_scale, (255, 255, 255), info_thickness)
         cv2.putText(image_with_labels, nav_text, (20, nav_y), 
-                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                   cv2.FONT_HERSHEY_SIMPLEX, nav_font_scale, (255, 255, 255), nav_thickness)
         
         # Resize if too large
         max_width = 1200
