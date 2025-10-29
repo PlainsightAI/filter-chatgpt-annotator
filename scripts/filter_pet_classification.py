@@ -53,9 +53,21 @@ if __name__ == '__main__':
         print("Please set the path to your input video in the .env file")
         exit(1)
 
+    # Show output configuration
+    output_dir = os.getenv('FILTER_OUTPUT_DIR', './output_frames')
+    save_frames = os.getenv('FILTER_SAVE_FRAMES', 'true').lower() == 'true'
+    no_ops = os.getenv('FILTER_NO_OPS', 'false').lower() == 'true'
+    if save_frames:
+        print(f"Results will be saved to: {output_dir}")
+        print("📊 Binary classification datasets will be generated")
+    else:
+        print("Results will only be shown in web interface (not saved to files)")
+    if no_ops:
+        print("⚠️  NO-OPS MODE ENABLED - API calls will be skipped (testing mode)")
+
     Filter.run_multi([
         (VideoIn, dict(
-            sources=f'file://{video_path}!resize=960x540!sync!loop;main',  # Resize for better performance, sync
+            sources=f'file://{video_path}!resize=960x540!sync!no-loop;main',  # Resize for better performance, sync
             outputs='tcp://*:5550',
         )),
         (FilterChatgptAnnotator, FilterChatgptAnnotatorConfig(
@@ -69,7 +81,7 @@ if __name__ == '__main__':
             temperature=float(os.getenv('FILTER_TEMPERATURE', '0.1')),
             max_image_size=int(os.getenv('FILTER_MAX_IMAGE_SIZE', '512')),
             image_quality=int(os.getenv('FILTER_IMAGE_QUALITY', '85')),
-            save_frames=os.getenv('FILTER_SAVE_FRAMES', 'false').lower() == 'true',
+            save_frames=save_frames,
             output_dir=os.getenv('FILTER_OUTPUT_DIR', './output_frames'),
             # Optional: Set output schema for pet classification
             output_schema={
