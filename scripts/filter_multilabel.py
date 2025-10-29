@@ -1,21 +1,22 @@
 #!/usr/bin/env python
 
 """
-Example script for running document word detection with bounding boxes using FilterChatgptAnnotator.
+Example script for running avocado, boiled eggs and fish annotation with bounding boxes using FilterChatgptAnnotator.
 
-This script demonstrates how to use the FilterChatgptAnnotator with document word detection
-prompts that include bounding box coordinates for text detection tasks.
+This script demonstrates how to use the FilterChatgptAnnotator with avocado, boiled eggs and fish annotation
+prompts that include bounding box coordinates for object detection tasks.
 
 Required environment variables in .env file:
     FILTER_CHATGPT_API_KEY: OpenAI API key
     FILTER_PROMPT: Path to the prompt file (should include bbox)
-    VIDEO_PATH: Path to the input document image file
+    VIDEO_PATH: Path to the input video file
     # Task type is auto-detected based on bbox presence in output_schema
+
 
 Example .env file content:
     FILTER_CHATGPT_API_KEY=your_openai_api_key_here
-    FILTER_PROMPT=./prompts/chit_prompt_multilabel_class.txt
-    VIDEO_PATH=/path/to/your/document.mp4
+    FILTER_PROMPT=./prompts/salad_prompt_multilabel_class_demo.txt
+    VIDEO_PATH=/path/to/your/video.mp4
     FILTER_CHATGPT_MODEL=gpt-4o-mini
     FILTER_MAX_TOKENS=1000
     FILTER_TEMPERATURE=0.1
@@ -46,10 +47,11 @@ if __name__ == '__main__':
     video_path = os.getenv('VIDEO_PATH', '')
     
     # Get prompt path from environment variable
-    prompt_path = os.getenv('FILTER_PROMPT', './prompts/chit_prompt_multilabel_class.txt')
+    prompt_path = os.getenv('FILTER_PROMPT', './prompts/salad_prompt_multilabel.txt')
     
     # Get API key from environment variable
     api_key = os.getenv('FILTER_CHATGPT_API_KEY', '')
+    
     
     if not api_key:
         print("Error: FILTER_CHATGPT_API_KEY environment variable is required")
@@ -59,12 +61,12 @@ if __name__ == '__main__':
     # Check if we have video path
     if not video_path:
         print("Error: VIDEO_PATH environment variable is required")
-        print("Please set the path to your input document image in the .env file")
+        print("Please set the path to your input video in the .env file")
         exit(1)
 
-    # Use VideoIn for image processing (can handle single images too)
+    # Use VideoIn for video processing (processes all frames)
     input_source = (VideoIn, dict(
-        sources=f'file://{video_path}!sync!no-loop;main',  # Process image once, no loop, topic: main, sync
+        sources=f'file://{video_path}!sync!no-loop;main',  # Process video, no loop, topic: main, sync
         outputs='tcp://*:5550',
     ))
     print(f"Using VideoIn with path: {video_path} (no loop, sync)")
@@ -82,7 +84,7 @@ if __name__ == '__main__':
     Filter.run_multi([
         input_source,
         (FilterChatgptAnnotator, FilterChatgptAnnotatorConfig(
-            id="filter_chatgpt_document_words_bb",
+            id="filter_chatgpt_avocado_tomato_fish_bb",
             sources="tcp://localhost:5550",
             outputs="tcp://*:5552",
             chatgpt_api_key=api_key,
@@ -93,11 +95,10 @@ if __name__ == '__main__':
             preserve_original_format=True,  # Preserve original format when possible
             # Task type is auto-detected based on bbox presence in output_schema
             # output_dir=os.getenv('FILTER_OUTPUT_DIR', './output_frames'),
-            confidence_threshold=float(os.getenv('FILTER_CONFIDENCE_THRESHOLD', '0.9')),
-            # Set output schema for document words with bounding boxes
+            confidence_threshold=float(os.getenv('FILTER_CONFIDENCE_THRESHOLD', '0.7')),
+            # Set output schema for avocado and fish with bounding boxes
             output_schema={
                 "avocado": {"present": False, "confidence": 0.0, "bbox": None},
-                "chicken": {"present": False, "confidence": 0.0, "bbox": None},
                 "fish": {"present": False, "confidence": 0.0, "bbox": None},
             }
         )),
