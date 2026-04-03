@@ -1,33 +1,16 @@
 #!/usr/bin/env python
 
 """
-Example script for running avocado, boiled eggs and fish annotation with bounding boxes using FilterChatgptAnnotator.
-
-This script demonstrates how to use the FilterChatgptAnnotator with avocado, boiled eggs and fish annotation
-prompts that include bounding box coordinates for object detection tasks.
+Example script for multilabel classification (e.g. avocado, fish) with FilterChatgptAnnotator.
 
 Required environment variables in .env file:
     FILTER_CHATGPT_API_KEY: OpenAI API key
-    FILTER_PROMPT: Path to the prompt file (should include bbox)
+    FILTER_PROMPT: Path to the prompt file
     VIDEO_PATH: Path to the input video file
-    # Task type is auto-detected based on bbox presence in output_schema
 
-
-Example .env file content:
-    FILTER_CHATGPT_API_KEY=your_openai_api_key_here
-    FILTER_PROMPT=./prompts/salad_prompt_multilabel_class_demo.txt
-    VIDEO_PATH=/path/to/your/video.mp4
-    FILTER_CHATGPT_MODEL=gpt-4o-mini
-    FILTER_MAX_TOKENS=1000
-    FILTER_TEMPERATURE=0.1
-    FILTER_MAX_IMAGE_SIZE=512
-    FILTER_SAVE_FRAMES=true
-    FILTER_RECURSIVE=false
-    FILTER_CONFIDENCE_THRESHOLD=0.7
-
-Output:
-    - Always: Binary datasets in binary_datasets/ and binary_datasets_balanced/
-    - If bbox schema present: COCO format dataset in detection_datasets/annotations.json
+Output when saving frames:
+    - labels.jsonl and binary_datasets/ (and balanced variants)
+    - COCO multilabel export under multilabel_datasets/ when multiple labels are configured
 """
 
 import os
@@ -77,29 +60,26 @@ if __name__ == '__main__':
     if save_frames:
         print(f"Results will be saved to: {output_dir}")
         print("📊 Binary classification datasets will be generated")
-        print("📦 COCO format detection dataset will be generated (if bbox schema present)")
+        print("📦 COCO format multilabel dataset will be generated (multilabel_datasets/)")
     else:
         print("Results will only be shown in web interface (not saved to files)")
 
     Filter.run_multi([
         input_source,
         (FilterChatgptAnnotator, FilterChatgptAnnotatorConfig(
-            id="filter_chatgpt_avocado_tomato_fish_bb",
+            id="filter_chatgpt_avocado_fish_multilabel",
             sources="tcp://localhost:5550",
             outputs="tcp://*:5552",
             chatgpt_api_key=api_key,
             prompt=prompt_path,
-            # HIGH QUALITY SETTINGS - Maximum quality for ChatGPT Vision API
-            max_image_size=0,  # Keep original size (no downscaling)
-            image_quality=98,  # Maximum JPEG quality (98% for best results)
-            preserve_original_format=True,  # Preserve original format when possible
-            # Task type is auto-detected based on bbox presence in output_schema
-            # output_dir=os.getenv('FILTER_OUTPUT_DIR', './output_frames'),
+            max_image_size=0,
+            image_quality=98,
+            preserve_original_format=True,
             confidence_threshold=float(os.getenv('FILTER_CONFIDENCE_THRESHOLD', '0.7')),
-            # Set output schema for avocado and fish with bounding boxes
             output_schema={
-                "avocado": {"present": False, "confidence": 0.0, "bbox": None},
-                "fish": {"present": False, "confidence": 0.0, "bbox": None},
+                "avocado": {"present": False, "confidence": 0.0},
+                "fish": {"present": False, "confidence": 0.0},
+                "chicken": {"present": False, "confidence": 0.0},
             }
         )),
         (Webvis, dict(

@@ -10,7 +10,7 @@ make install
 
 ## Quick Start Examples
 
-### Example 1: Food Annotation with Bounding Boxes
+### Example 1: Food annotation (classification)
 
 ```python
 #!/usr/bin/env python3
@@ -28,7 +28,7 @@ load_dotenv()
 # Configuration
 video_path = os.getenv('VIDEO_PATH', '/path/to/salad_video.mp4')
 api_key = os.getenv('FILTER_CHATGPT_API_KEY')
-prompt_path = './prompts/simple_salad_prompt_bb.txt'
+prompt_path = './prompts/simple_salad_prompt.txt'
 
 # Run the pipeline
 Filter.run_multi([
@@ -43,9 +43,9 @@ Filter.run_multi([
         chatgpt_api_key=api_key,
         prompt=prompt_path,
         output_schema={
-            "avocado": {"present": False, "confidence": 0.0, "bbox": None},
-            "lettuce": {"present": False, "confidence": 0.0, "bbox": None},
-            "tomato": {"present": False, "confidence": 0.0, "bbox": None}
+            "avocado": {"present": False, "confidence": 0.0},
+            "lettuce": {"present": False, "confidence": 0.0},
+            "tomato": {"present": False, "confidence": 0.0}
         },
         confidence_threshold=0.8,
         max_image_size=512,
@@ -91,9 +91,9 @@ Filter.run_multi([
         chatgpt_api_key=api_key,
         prompt=prompt_path,
         output_schema={
-            "dog": {"present": False, "confidence": 0.0, "bbox": None},
-            "cat": {"present": False, "confidence": 0.0, "bbox": None},
-            "bird": {"present": False, "confidence": 0.0, "bbox": None}
+            "dog": {"present": False, "confidence": 0.0},
+            "cat": {"present": False, "confidence": 0.0},
+            "bird": {"present": False, "confidence": 0.0}
         },
         confidence_threshold=0.7,
         max_image_size=1024,
@@ -138,9 +138,9 @@ Filter.run_multi([
         chatgpt_api_key=api_key,
         prompt=prompt_path,
         output_schema={
-            "tumor": {"present": False, "confidence": 0.0, "bbox": None},
-            "lesion": {"present": False, "confidence": 0.0, "bbox": None},
-            "normal_tissue": {"present": False, "confidence": 0.0, "bbox": None}
+            "tumor": {"present": False, "confidence": 0.0},
+            "lesion": {"present": False, "confidence": 0.0},
+            "normal_tissue": {"present": False, "confidence": 0.0}
         },
         confidence_threshold=0.9,
         max_image_size=0,  # Keep original size for medical images
@@ -225,77 +225,32 @@ FILTER_NO_OPS=false
 ### Food Annotation Prompt
 
 ```
-You are a precision vision analyst for food annotation. Given an image of a salad, determine whether each of the following ingredients is present IN THE SALAD and provide EXACT bounding box coordinates.
+You are a vision analyst for food annotation. Given an image of a salad, determine whether each of the following ingredients is present IN THE SALAD.
 
-Return ONLY valid JSON with the exact keys:
+Return ONLY valid JSON with "present" and "confidence" (0.0-1.0) for each of:
+  "avocado", "lettuce", "tomato"
 
-{
-  "avocado": {"present": <true|false>, "confidence": <0.0-1.0>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null},
-  "lettuce": {"present": <true|false>, "confidence": <0.0-1.0>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null},
-  "tomato": {"present": <true|false>, "confidence": <0.0-1.0>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null}
-}
-
-TARGET INGREDIENTS: ["avocado", "lettuce", "tomato"]
-
-CRITICAL ANNOTATION RULES:
-- Only mark ingredients as present if they are ACTUALLY IN THE SALAD PLATE/BOWL
-- Bounding boxes must TIGHTLY FIT the specific ingredient
-- For AVOCADO: Only include the green avocado pieces/slices
-- For LETTUCE: Only include the green leafy parts
-- For TOMATO: Only include red tomato pieces/slices
-- Use normalized coordinates (0.0 to 1.0)
-- Confidence should reflect your certainty
+Only mark ingredients as present if they are actually in the plate/bowl.
 ```
 
 ### Pet Classification Prompt
 
 ```
-You are a precision vision analyst for pet classification. Given an image, determine whether each of the following pets is present and provide EXACT bounding box coordinates.
+You are a vision analyst for pet classification. Given an image, determine whether each of the following pets is present.
 
-Return ONLY valid JSON with the exact keys:
-
-{
-  "dog": {"present": <true|false>, "confidence": <0.0-1.0>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null},
-  "cat": {"present": <true|false>, "confidence": <0.0-1.0>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null},
-  "bird": {"present": <true|false>, "confidence": <0.0-1.0>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null}
-}
-
-TARGET PETS: ["dog", "cat", "bird"]
-
-CRITICAL ANNOTATION RULES:
-- Only mark pets as present if they are clearly visible in the image
-- Bounding boxes must ENCOMPASS ONLY the specific pet
-- For DOG: Include the entire dog body
-- For CAT: Include the entire cat body
-- For BIRD: Include the entire bird body
-- Use normalized coordinates (0.0 to 1.0)
-- Confidence should reflect your certainty
+Return ONLY valid JSON with "present" and "confidence" (0.0-1.0) for each of:
+  "dog", "cat", "bird"
 ```
 
 ### Medical Imaging Prompt
 
 ```
-You are a precision vision analyst for medical imaging. Given an X-ray image, determine whether each of the following conditions is present and provide EXACT bounding box coordinates.
+You are a vision analyst for medical imaging. Given an X-ray image, determine whether each of the following is suggested by the image.
 
-Return ONLY valid JSON with the exact keys:
+Return ONLY valid JSON with "present" and "confidence" (0.0-1.0) for each of:
+  "tumor", "lesion", "normal_tissue"
 
-{
-  "tumor": {"present": <true|false>, "confidence": <0.0-1.0>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null},
-  "lesion": {"present": <true|false>, "confidence": <0.0-1.0>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null},
-  "normal_tissue": {"present": <true|false>, "confidence": <0.0-1.0>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null}
-}
-
-TARGET CONDITIONS: ["tumor", "lesion", "normal_tissue"]
-
-CRITICAL ANNOTATION RULES:
-- Only mark conditions as present if they are clearly visible
-- Bounding boxes must ENCOMPASS ONLY the specific condition
-- For TUMOR: Include the entire tumor area
-- For LESION: Include the entire lesion area
-- For NORMAL_TISSUE: Include areas of normal tissue
-- Use normalized coordinates (0.0 to 1.0)
-- Confidence should reflect your certainty
-- Be conservative in your assessments
+Be conservative. This is not a diagnostic tool.
 ```
 
 ## Output Analysis Examples
@@ -326,21 +281,17 @@ def analyze_dataset(output_dir):
     
     for label in labels:
         present_count = 0
-        bbox_count = 0
         confidence_scores = []
-        
+
         for record in records:
             if label in record["labels"]:
                 data = record["labels"][label]
                 if data.get('present', False):
                     present_count += 1
                     confidence_scores.append(data.get('confidence', 0.0))
-                    if data.get('bbox') is not None:
-                        bbox_count += 1
-        
+
         print(f"\n{label.upper()}:")
         print(f"  Present: {present_count}/{len(records)} ({present_count/len(records)*100:.1f}%)")
-        print(f"  With bbox: {bbox_count}/{present_count} ({bbox_count/present_count*100:.1f}%)")
         if confidence_scores:
             print(f"  Avg confidence: {sum(confidence_scores)/len(confidence_scores):.2f}")
 
@@ -368,20 +319,12 @@ def quality_check(output_dir):
                 for label, data in record["labels"].items():
                     present = data.get('present', False)
                     confidence = data.get('confidence', 0.0)
-                    bbox = data.get('bbox', None)
-                    
-                    # Check consistency
+
                     if present and confidence < 0.5:
                         issues.append(f"Line {line_num}: {label} present but low confidence ({confidence:.2f})")
-                    
+
                     if not present and confidence > 0.7:
                         issues.append(f"Line {line_num}: {label} not present but high confidence ({confidence:.2f})")
-                    
-                    if present and bbox is None:
-                        issues.append(f"Line {line_num}: {label} present but no bbox")
-                    
-                    if not present and bbox is not None:
-                        issues.append(f"Line {line_num}: {label} not present but has bbox")
     
     if issues:
         print("Quality issues found:")
@@ -497,7 +440,7 @@ monitor_performance()
 
 ## Best Practices Summary
 
-1. **Start Simple**: Begin with basic classification before adding bounding boxes
+1. **Start Simple**: Use a small label set and validate on sample frames first
 2. **Test Prompts**: Validate prompts with sample images before full processing
 3. **Monitor Costs**: Use appropriate image sizes and model settings
 4. **Quality Check**: Review generated annotations for accuracy

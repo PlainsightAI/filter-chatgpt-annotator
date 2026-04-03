@@ -19,8 +19,8 @@ PIPELINE := \
       --sources 'tcp://localhost:5550' \
       --outputs 'tcp://*:5552' \
       --chatgpt_api_key 'sk-open-ai-key' \
-      --prompt './prompts/simple_salad_prompt_bb_v3.txt' \
-      --output_schema '{"avocado":{"present":false,"confidence":0.0,"bbox":null},"lettuce":{"present":false,"confidence":0.0,"bbox":null},"tomato":{"present":false,"confidence":0.0,"bbox":null}}' \
+      --prompt './prompts/simple_salad_prompt.txt' \
+      --output_schema '{"avocado":{"present":false,"confidence":0.0},"lettuce":{"present":false,"confidence":0.0},"tomato":{"present":false,"confidence":0.0}}' \
       --mq_log pretty \
   - Webvis \
       --sources 'tcp://localhost:5552'

@@ -104,8 +104,11 @@ class TestFilterChatgptAnnotator(unittest.TestCase):
         self.assertIn("meta", result_frame.data)
         self.assertIn("chatgpt_annotator", result_frame.data["meta"])
         
+        meta_ann = result_frame.data["meta"]["chatgpt_annotator"]
+        self.assertEqual(meta_ann["schema_version"], "1.0")
+
         # Verify result uses default annotations
-        annotations = result_frame.data["meta"]["chatgpt_annotator"]["annotations"]
+        annotations = meta_ann["annotations"]
         self.assertEqual(annotations["item1"]["present"], False)
         self.assertEqual(annotations["item1"]["confidence"], 0.0)
         self.assertEqual(annotations["item2"]["present"], False)
@@ -171,9 +174,7 @@ class TestFilterChatgptAnnotator(unittest.TestCase):
             "item1": {"present": False, "confidence": 0.0},
             "item2": {"present": False, "confidence": 0.0}
         }
-        # Set has_bbox_schema since we're not calling setup()
-        filter_instance.has_bbox_schema = False
-        
+
         # Test with valid annotations
         valid_annotations = {
             "item1": {"present": True, "confidence": 0.9},

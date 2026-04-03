@@ -10,7 +10,7 @@ A generic filter that uses ChatGPT Vision API for image annotation and analysis 
 
 - **Multi-domain Support**: Supports any domain requiring image classification and annotation (food, pets, medical, industrial, etc.)
 - **Configurable Prompts**: Customizable prompts for different annotation tasks
-- **Standardized Output**: Consistent JSON format with confidence scores
+- **Standardized Output**: Versioned JSON contract for frames and `labels.jsonl` ([docs/output_contract.md](docs/output_contract.md))
 - **Image Optimization**: Automatic image resizing to reduce API costs
 - **Fault Tolerant**: Logs and skips malformed data instead of crashing
 - **Real-time Processing**: Processes video streams in real-time
@@ -40,12 +40,12 @@ The filter returns processed frames with the following data structure:
 
 **Main Frame Data:**
 - Original frame data preserved
-- Processing results added to frame metadata:
+- Processing results under `meta.chatgpt_annotator` (see [docs/output_contract.md](docs/output_contract.md)):
+  - `schema_version`: Contract version string (e.g. `"1.0"`)
   - `annotations`: Dict with item_name -> {"present": bool, "confidence": float}
   - `usage`: Dict with token usage information
-  - `processing_time`: Processing time in seconds
-  - `timestamp`: Processing timestamp
-  - `error`: Error message if processing failed
+  - `processing_time`, `timestamp`, `model`, `frame_id`
+  - `error`: Present when processing failed
 
 **Topic Forwarding:**
 The `forward_main` parameter controls whether the main topic from input frames is forwarded to the output:
@@ -280,7 +280,7 @@ When `save_frames=true`, the following structure is created:
 │   ├── 0_1758035382121.jpg  # Frame 0 with timestamp
 │   ├── 1_1758035382122.jpg  # Frame 1 with timestamp
 │   └── 2_1758035382123.jpg  # Frame 2 with timestamp
-├── labels.jsonl              # Dataset in dataset_langchain format
+├── labels.jsonl              # One JSON line per frame (see docs/output_contract.md)
 └── binary_datasets/          # Generated automatically on shutdown (overwrites existing)
     ├── item1_labels.json
     ├── item2_labels.json
@@ -293,6 +293,9 @@ When `save_frames=true`, the following structure is created:
     ├── item3_labels.json
     ├── item4_labels.json
     └── _summary_report.json  # Summary report (highlighted with underscore)
+└── multilabel_datasets/      # When multiple labels in schema: COCO-style annotations.json
+    ├── annotations.json
+    └── _summary_report.json
 ```
 
 **Important Notes:**
@@ -385,43 +388,6 @@ This configuration ensures that:
 - Processed results are available alongside the original data
 - Pipeline compatibility is maintained
 
-### 6. Object Detection Tasks
-Generate COCO format datasets for object detection training:
-
-```bash
-export FILTER_PROMPT="./prompts/food_annotation_prompt_bb.txt"
-export FILTER_OUTPUT_SCHEMA='{"avocado": {"present": false, "confidence": 0.0, "bbox": null}}'
-python scripts/filter_food_annotation.py
-```
-
-**Auto-detection**: The filter automatically detects when to generate detection datasets based on the presence of `bbox` fields in the output schema.
-
-**Output Structure**:
-```
-output_frames/
-├── data/                     # Processed images
-├── labels.jsonl              # Main dataset with bbox coordinates
-├── binary_datasets/          # Classification datasets (always generated)
-│   ├── avocado_labels.json
-│   └── _summary_report.json
-└── detection_datasets/       # COCO format datasets (if bbox schema present)
-    ├── annotations.json      # COCO format annotations
-    └── _summary_report.json  # Detection dataset summary
-```
-
-**Key Features**:
-- ✅ **Always generates classification datasets** for binary classification training
-- ✅ **Auto-generates detection datasets** when bbox fields are present in schema
-- ✅ **No manual task configuration** needed - fully automatic
-- ✅ **Backward compatible** with existing configurations
-
-**COCO Format Features**:
-- Standard COCO JSON format with `images`, `annotations`, and `categories` sections
-- Automatic image dimension detection
-- Absolute coordinate conversion from normalized bbox coordinates
-- Category mapping with unique IDs
-- Compatible with popular frameworks (PyTorch, TensorFlow, etc.)
-
 ## Prompt Format & Importance
 
 The prompt format is critical for annotation quality. Prompts must:
@@ -465,10 +431,11 @@ All annotations follow this standardized format:
 }
 ```
 
-### Example Runtime Output
+### Example saved JSONL line
 
 ```json
 {
+  "schema_version": "1.0",
   "image": "001.png",
   "labels": {
     "cat": {"present": true, "confidence": 0.92},
@@ -478,9 +445,12 @@ All annotations follow this standardized format:
     "input_tokens": 26288,
     "output_tokens": 414,
     "total_tokens": 26702
-  }
+  },
+  "prompt_used": "pet_classification_prompt.txt"
 }
 ```
+
+Full contract: [docs/output_contract.md](docs/output_contract.md).
 
 ## Available Scripts
 

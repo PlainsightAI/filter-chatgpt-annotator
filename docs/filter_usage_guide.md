@@ -2,19 +2,18 @@
 
 ## Overview
 
-The `ChatTag` is a powerful filter that uses ChatGPT Vision API for image annotation and analysis. It can process video streams or image collections to extract structured annotations with confidence scores and bounding boxes.
+The `ChatTag` is a powerful filter that uses ChatGPT Vision API for image annotation and analysis. It can process video streams or image collections to extract structured classification labels with confidence scores.
 
 ## Key Features
 
 - **Multi-domain Support**: Works with any domain requiring image classification (food, pets, medical, industrial, etc.)
 - **Configurable Prompts**: Customizable prompts for different annotation tasks
-- **Standardized Output**: Consistent JSON format with confidence scores
-- **Bounding Box Support**: Optional object detection with precise coordinates
+- **Standardized Output**: Versioned contract for stream metadata and JSONL (see [output_contract.md](output_contract.md))
 - **Image Optimization**: Automatic resizing to reduce API costs
 - **Fault Tolerant**: Logs errors and continues processing
 - **Real-time Processing**: Processes video streams in real-time
 - **Web Visualization**: Built-in web interface for viewing results
-- **Dataset Generation**: Automatically generates training datasets in multiple formats
+- **Dataset Generation**: Binary classification datasets from saved `labels.jsonl`
 
 ## Installation & Setup
 
@@ -174,9 +173,9 @@ config = FilterChatgptAnnotatorConfig(
     chatgpt_api_key="your_api_key",
     prompt="./prompts/food_prompt.txt",
     output_schema={
-        "avocado": {"present": False, "confidence": 0.0, "bbox": None},
-        "lettuce": {"present": False, "confidence": 0.0, "bbox": None},
-        "tomato": {"present": False, "confidence": 0.0, "bbox": None}
+        "avocado": {"present": False, "confidence": 0.0},
+        "lettuce": {"present": False, "confidence": 0.0},
+        "tomato": {"present": False, "confidence": 0.0}
     }
 )
 
@@ -204,8 +203,8 @@ Filter.run_multi([
         chatgpt_api_key="your_api_key",
         prompt="./prompts/food_prompt.txt",
         output_schema={
-            "avocado": {"present": False, "confidence": 0.0, "bbox": None},
-            "lettuce": {"present": False, "confidence": 0.0, "bbox": None}
+            "avocado": {"present": False, "confidence": 0.0},
+            "lettuce": {"present": False, "confidence": 0.0}
         }
     )),
     (Webvis, dict(
@@ -224,16 +223,15 @@ Each processed frame includes the following metadata:
 {
   "meta": {
     "chatgpt_annotator": {
+      "schema_version": "1.0",
       "annotations": {
         "avocado": {
           "present": true,
-          "confidence": 0.95,
-          "bbox": [0.2, 0.3, 0.4, 0.5]
+          "confidence": 0.95
         },
         "lettuce": {
           "present": true,
-          "confidence": 0.88,
-          "bbox": [0.1, 0.2, 0.8, 0.7]
+          "confidence": 0.88
         }
       },
       "usage": {
@@ -252,11 +250,11 @@ Each processed frame includes the following metadata:
 
 ### Generated Datasets
 
-The filter automatically generates multiple dataset formats:
+The filter generates JSONL and binary classification exports when `save_frames` is enabled.
 
 #### 1. JSONL Format (`labels.jsonl`)
 ```json
-{"image": "output_frames/data/0_1640995200.jpg", "labels": {"avocado": {"present": true, "confidence": 0.95, "bbox": [0.2, 0.3, 0.4, 0.5]}}, "usage": {"input_tokens": 26088, "output_tokens": 107, "total_tokens": 26195}}
+{"schema_version": "1.0", "image": "output_frames/data/0_1640995200.jpg", "labels": {"avocado": {"present": true, "confidence": 0.95}}, "usage": {"input_tokens": 26088, "output_tokens": 107, "total_tokens": 26195}, "prompt_used": "food_prompt.txt"}
 ```
 
 #### 2. Binary Classification Datasets (`binary_datasets/`)
@@ -270,58 +268,28 @@ The filter automatically generates multiple dataset formats:
 }
 ```
 
-#### 3. COCO Format (`detection_datasets/annotations.json`)
-```json
-{
-  "info": {
-    "description": "ChatGPT Annotator Detection Dataset",
-    "version": "1.0",
-    "year": 2024
-  },
-  "images": [
-    {
-      "id": 1,
-      "width": 640,
-      "height": 480,
-      "file_name": "0_1640995200.jpg"
-    }
-  ],
-  "annotations": [
-    {
-      "id": 1,
-      "image_id": 1,
-      "category_id": 1,
-      "bbox": [128.0, 144.0, 128.0, 96.0],
-      "area": 12288.0,
-      "iscrowd": 0
-    }
-  ],
-  "categories": [
-    {"id": 1, "name": "avocado", "supercategory": "object"}
-  ]
-}
-```
+#### 3. Multilabel COCO (`multilabel_datasets/`)
+
+If `output_schema` defines **more than one** label, shutdown also writes COCO-style `annotations.json`: each image gets one full-frame box per label that is present above `confidence_threshold`. Use this for multilabel tooling that expects COCO layout.
 
 ## Prompt Design
 
 ### Basic Prompt Structure
 
 ```
-You are a precision vision analyst for [DOMAIN] annotation. Given an image of [CONTEXT], determine whether each of the following [ITEMS] is present and provide EXACT bounding box coordinates.
+You are a vision analyst for [DOMAIN]. Given an image of [CONTEXT], determine whether each of the following [ITEMS] is present.
 
 Return ONLY valid JSON with the exact keys:
 
 {
-  "item1": {"present": <true|false>, "confidence": <0.0-1.0>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null},
-  "item2": {"present": <true|false>, "confidence": <0.0-1.0>, "bbox": [<x_min>, <y_min>, <x_max>, <y_max>] or null}
+  "item1": {"present": <true|false>, "confidence": <0.0-1.0>},
+  "item2": {"present": <true|false>, "confidence": <0.0-1.0>}
 }
 
 TARGET ITEMS: ["item1", "item2"]
 
-CRITICAL ANNOTATION RULES:
+CRITICAL RULES:
 - Only mark items as present if they are ACTUALLY IN THE [CONTEXT]
-- Bounding boxes must TIGHTLY FIT the specific item
-- Use normalized coordinates (0.0 to 1.0)
 - Confidence should reflect your certainty
 ```
 
@@ -329,30 +297,20 @@ CRITICAL ANNOTATION RULES:
 
 #### Food Annotation
 ```
-You are a precision vision analyst for food annotation. Given an image of a salad, determine whether each of the following ingredients is present IN THE SALAD and provide EXACT bounding box coordinates.
+You are a vision analyst for food annotation. Given an image of a salad, determine whether each of the following ingredients is present IN THE SALAD.
 
 TARGET INGREDIENTS: ["avocado", "lettuce", "tomato"]
 
-CRITICAL RULES:
-- Only mark ingredients as present if they are ACTUALLY IN THE SALAD PLATE/BOWL
-- Bounding boxes must ENCOMPASS ONLY the target ingredient
-- For AVOCADO: Only include the green avocado pieces/slices
-- For LETTUCE: Only include the green leafy parts
-- For TOMATO: Only include red tomato pieces/slices
+Return ONLY valid JSON with "present" and "confidence" (0.0-1.0) for each ingredient.
 ```
 
 #### Pet Classification
 ```
-You are a precision vision analyst for pet classification. Given an image, determine whether each of the following pets is present and provide EXACT bounding box coordinates.
+You are a vision analyst for pet classification. Given an image, determine whether each of the following pets is present.
 
 TARGET PETS: ["dog", "cat", "bird"]
 
-CRITICAL RULES:
-- Only mark pets as present if they are clearly visible in the image
-- Bounding boxes must ENCOMPASS ONLY the specific pet
-- For DOG: Include the entire dog body
-- For CAT: Include the entire cat body
-- For BIRD: Include the entire bird body
+Return ONLY valid JSON with "present" and "confidence" (0.0-1.0) for each pet.
 ```
 
 ## Error Handling
@@ -364,7 +322,6 @@ CRITICAL RULES:
 | `chatgpt_api_key is required` | Missing API key | Set `FILTER_CHATGPT_API_KEY` environment variable |
 | `prompt is required` | Missing prompt file | Set `FILTER_PROMPT` environment variable |
 | `Failed to parse JSON response` | Invalid API response | Check prompt format and model capabilities |
-| `Invalid bbox coordinates` | Malformed bounding box | Validate prompt instructions for bbox format |
 | `API ERROR: Rate limit exceeded` | Too many requests | Implement retry logic or reduce request frequency |
 
 ### Debugging
@@ -419,9 +376,8 @@ When `FILTER_DEBUG_METADATA=true`, the filter will create debug files in `output
 - Test prompts with sample images
 
 ### 2. Schema Design
-- Define clear output schemas
+- Define clear output schemas (`present` / `confidence` per label)
 - Use appropriate confidence thresholds
-- Include bounding box support when needed
 - Validate schema completeness
 
 ### 3. Error Handling
@@ -433,7 +389,6 @@ When `FILTER_DEBUG_METADATA=true`, the filter will create debug files in `output
 ### 4. Dataset Quality
 - Review generated annotations
 - Use balanced datasets for training
-- Validate bounding box accuracy
 - Check confidence score distributions
 
 ## Troubleshooting
