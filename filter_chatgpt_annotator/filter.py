@@ -262,12 +262,14 @@ class FilterChatgptAnnotator(Filter):
             self.client = None
             logger.info("Skipping OpenAI client initialization (no-ops mode)")
 
+        # Basename for JSONL `prompt_used` — always set so consumers never rely on getattr fallbacks
+        _prompt_path = (getattr(config, "prompt", None) or "").strip()
+        self.prompt_filename = os.path.basename(_prompt_path) if _prompt_path else ""
+
         # Load prompt from file
         try:
             with open(config.prompt, 'r', encoding='utf-8') as f:
                 self.prompt_text = f.read().strip()
-            # Store prompt filename for metadata
-            self.prompt_filename = os.path.basename(config.prompt)
             logger.debug(f"Loaded prompt from: {config.prompt}")
         except Exception as e:
             raise RuntimeError(f"Failed to load prompt file: {str(e)}")
@@ -683,7 +685,7 @@ class FilterChatgptAnnotator(Filter):
                 "image": image_path or f"{frame_id}.jpg",
                 "labels": results.get("annotations", {}),
                 "usage": results.get("usage", {}),
-                "prompt_used": getattr(self, 'prompt_filename', 'unknown')
+                "prompt_used": self.prompt_filename
             }
             
             # Save as JSONL (one line per entry)

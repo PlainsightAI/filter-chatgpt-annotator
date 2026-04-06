@@ -36,7 +36,7 @@ Versioned payloads produced by `FilterChatgptAnnotator` for streaming frames and
 | `image`          | string | yes      | Path to the saved frame image (relative to cwd or as saved). |
 | `labels`         | object | yes      | Same shape as `annotations`. |
 | `usage`          | object | yes      | Same as stream `usage`. |
-| `prompt_used`    | string | yes      | Basename of the prompt file. |
+| `prompt_used`    | string | yes      | Basename of the configured prompt path (`config.prompt`); empty string if no path was set. Always set after `setup()`. |
 
 ## Examples
 
