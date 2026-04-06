@@ -1,6 +1,8 @@
 # ChatTag output contract (OpenFilter)
 
-Versioned payloads produced by `FilterChatgptAnnotator` for streaming frames and for saved JSONL. Downstream filters should read `schema_version` and ignore unknown top-level fields.
+Versioned payloads produced by `FilterChatgptAnnotator` for streaming frames and for saved JSONL. Downstream filters should read `schema_version` and **ignore unknown fields** (top-level or nested) unless they opt in to a documented extension.
+
+The JSON Schema under `schemas/` lists required keys and known shapes; it **does not** forbid extra properties, so a validator must not reject payloads merely for carrying additional keys (forward compatibility within the same `schema_version` string).
 
 ## `schema_version`
 
@@ -78,4 +80,4 @@ When `save_frames` is on and `output_schema` has **more than one** key, shutdown
 
 ## Machine-readable schema
 
-See [schemas/chattag_output.schema.json](../schemas/chattag_output.schema.json) for a JSON Schema description of the stream object and JSONL line shape.
+See [schemas/chattag_output.schema.json](../schemas/chattag_output.schema.json): documents required fields and types; additional properties are allowed so future optional fields (e.g. debug metadata) do not break validation.
