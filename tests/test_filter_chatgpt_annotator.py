@@ -199,6 +199,27 @@ class TestFilterChatgptAnnotator(unittest.TestCase):
         self.assertEqual(result["item2"]["present"], False)
         self.assertEqual(result["item2"]["confidence"], 0.0)
     
+    def test_default_for_schema_key(self):
+        """_default_for_schema_key: non-dict defaults and legacy dicts with extra keys."""
+        d = FilterChatgptAnnotator._default_for_schema_key
+
+        self.assertEqual(d(None), {"present": False, "confidence": 0.0})
+        self.assertEqual(d(0), {"present": False, "confidence": 0.0})
+        self.assertEqual(d("x"), {"present": False, "confidence": 0.0})
+        self.assertEqual(d([]), {"present": False, "confidence": 0.0})
+
+        self.assertEqual(d({}), {"present": False, "confidence": 0.0})
+
+        legacy = {
+            "present": True,
+            "confidence": 0.5,
+            "bbox": None,
+            "extra": "ignored",
+        }
+        out = d(legacy)
+        self.assertEqual(out, {"present": True, "confidence": 0.5})
+        self.assertEqual(set(out.keys()), {"present", "confidence"})
+
     def test_get_default_annotations(self):
         """Test default annotations generation."""
         config = FilterChatgptAnnotatorConfig(
@@ -216,6 +237,14 @@ class TestFilterChatgptAnnotator(unittest.TestCase):
         self.assertEqual(defaults["item1"]["confidence"], 0.0)
         self.assertEqual(defaults["item2"]["present"], False)
         self.assertEqual(defaults["item2"]["confidence"], 0.0)
+
+        # Legacy output_schema with bbox: defaults are classification-only
+        filter_instance.output_schema = {
+            "avocado": {"present": False, "confidence": 0.0, "bbox": None},
+        }
+        defaults = filter_instance._get_default_annotations()
+        self.assertEqual(defaults["avocado"], {"present": False, "confidence": 0.0})
+        self.assertNotIn("bbox", defaults["avocado"])
         
         # Test without schema
         filter_instance.output_schema = None
