@@ -1013,25 +1013,26 @@ class FilterChatgptAnnotator(Filter):
 
             category_mapping = {label: idx for idx, label in enumerate(sorted(labels), 1)}
 
+            try:
+                import cv2
+            except ImportError:
+                cv2 = None
+
             annotation_id = 1
             for image_id, record in enumerate(records, 1):
                 image_path = record["image"]
                 filename = os.path.basename(image_path)
 
-                try:
-                    import cv2
-                    full_image_path = self.output_dir / image_path
-                    if full_image_path.exists():
-                        img = cv2.imread(str(full_image_path))
-                        if img is not None:
-                            height, width = img.shape[:2]
-                        else:
-                            width, height = 640, 480
-                    else:
-                        width, height = 640, 480
-                except Exception as e:
-                    logger.warning(f"Could not read image dimensions for {filename}: {e}")
-                    width, height = 640, 480
+                width, height = 640, 480
+                if cv2 is not None:
+                    try:
+                        full_image_path = self.output_dir / image_path
+                        if full_image_path.exists():
+                            img = cv2.imread(str(full_image_path))
+                            if img is not None:
+                                height, width = img.shape[:2]
+                    except Exception as e:
+                        logger.warning(f"Could not read image dimensions for {filename}: {e}")
 
                 coco_dataset["images"].append({
                     "id": image_id,
