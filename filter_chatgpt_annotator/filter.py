@@ -681,7 +681,7 @@ class FilterChatgptAnnotator(Filter):
         try:
             # Create dataset_langchain format
             dataset_entry = {
-                "schema_version": results.get("schema_version", CHATTAG_OUTPUT_SCHEMA_VERSION),
+                "schema_version": results["schema_version"],
                 "image": image_path or f"{frame_id}.jpg",
                 "labels": results.get("annotations", {}),
                 "usage": results.get("usage", {}),
