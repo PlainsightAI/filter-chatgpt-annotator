@@ -1031,6 +1031,17 @@ class FilterChatgptAnnotator(Filter):
                             img = cv2.imread(str(full_image_path))
                             if img is not None:
                                 height, width = img.shape[:2]
+                            else:
+                                logger.warning(
+                                    "cv2.imread returned no data for %s (corrupt or unsupported format); "
+                                    "using fallback dimensions 640x480 for COCO export",
+                                    filename,
+                                )
+                        else:
+                            logger.warning(
+                                "Image not found at %s for COCO export; using fallback dimensions 640x480",
+                                full_image_path,
+                            )
                     except Exception as e:
                         logger.warning(f"Could not read image dimensions for {filename}: {e}")
 
