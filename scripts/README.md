@@ -16,19 +16,7 @@ Analyzes salad images to detect avocado, lettuce, and tomato with confidence sco
 - Binary classification datasets only
 - Web visualization with Webvis
 
-### 2. Simple Salad Detection with Bounding Boxes (`filter_simple_salad_bb.py`)
-Analyzes salad images to detect avocado, lettuce, and tomato with bounding box coordinates.
-
-**Use Case**: Simple salad analysis with object detection, ingredient localization
-**Prompt**: `./prompts/simple_salad_prompt_bb.txt`
-**Output Schema**: Detects avocado, lettuce, tomato with bounding boxes
-**Features**: 
-- Supports both video and image input
-- Automatic input source detection (VideoIn vs ImageIn)
-- Binary classification + COCO object detection datasets
-- Web visualization with Webvis
-
-### 3. Food Annotation (`filter_food_annotation.py`)
+### 2. Food Annotation (`filter_food_annotation.py`)
 Analyzes food images to detect salad ingredients with confidence scores.
 
 **Use Case**: Food analysis, nutrition tracking, ingredient detection
@@ -40,7 +28,7 @@ Analyzes food images to detect salad ingredients with confidence scores.
 - No-ops mode enabled by default for testing
 - Web visualization with Webvis
 
-### 4. Pet Classification (`filter_pet_classification.py`)
+### 3. Pet Classification (`filter_pet_classification.py`)
 Classifies images to detect presence of cats and dogs.
 
 **Use Case**: Pet detection, animal classification, security monitoring
@@ -176,25 +164,7 @@ export FILTER_RECURSIVE="false"      # Optional: scan subdirectories
 
 All scripts produce standardized JSON output with the following structure:
 
-```json
-{
-  "annotations": {
-    "item_name": {
-      "present": true|false,
-      "confidence": 0.0-1.0
-    }
-  },
-  "usage": {
-    "input_tokens": 1000,
-    "output_tokens": 100,
-    "total_tokens": 1100
-  },
-  "processing_time": 2.5,
-  "timestamp": 1234567890.123,
-  "model": "gpt-4o-mini",
-  "frame_id": "frame_001"
-}
-```
+See [docs/output_contract.md](../docs/output_contract.md) for `meta.chatgpt_annotator` and `labels.jsonl` (includes `schema_version`).
 
 ## Real-World Usage Examples
 

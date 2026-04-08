@@ -10,9 +10,12 @@ import io
 
 from openfilter.filter_runtime.filter import FilterConfig, Filter, Frame
 
-__all__ = ['FilterChatgptAnnotatorConfig', 'FilterChatgptAnnotator']
+__all__ = ['FilterChatgptAnnotatorConfig', 'FilterChatgptAnnotator', 'CHATTAG_OUTPUT_SCHEMA_VERSION']
 
 logger = logging.getLogger(__name__)
+
+# OpenFilter / JSONL output contract (see docs/output_contract.md)
+CHATTAG_OUTPUT_SCHEMA_VERSION = "1.0"
 
 
 class FilterChatgptAnnotatorConfig(FilterConfig):
@@ -51,9 +54,6 @@ class FilterChatgptAnnotatorConfig(FilterConfig):
     
     # Confidence threshold for positive classification (0.0 to 1.0)
     confidence_threshold: float = 0.9
-    
-    # Task type is auto-detected based on bbox presence in output_schema
-    # No longer needed as parameter
 
 
 class FilterChatgptAnnotator(Filter):
@@ -70,6 +70,7 @@ class FilterChatgptAnnotator(Filter):
     Main Frame Data:
     - Original frame data preserved
     - Processing results added to frame metadata:
+      - schema_version: Output contract version string
       - annotations: Dict with item_name -> {"present": bool, "confidence": float}
       - usage: Dict with token usage information
       - processing_time: Processing time in seconds
@@ -96,10 +97,8 @@ class FilterChatgptAnnotator(Filter):
     - Support for diverse datasets (any domain with image classification needs)
     - Optional frame persistence for auditing/debugging
     - Topic forwarding for pipeline compatibility
-    - Automatic dataset generation:
-      * Binary classification datasets (always generated)
-      * Object detection datasets in COCO format (when bbox schema present)
-      * Multilabel COCO datasets with full-image bounding boxes (when bbox schema present)
+    - Automatic binary classification dataset generation when saving frames
+    - COCO JSON under multilabel_datasets/ when output_schema has more than one label (full-image box per active label)
     """
 
     @classmethod
@@ -177,9 +176,6 @@ class FilterChatgptAnnotator(Filter):
         
         if config.confidence_threshold < 0.0 or config.confidence_threshold > 1.0:
             raise ValueError("confidence_threshold must be between 0.0 and 1.0")
-        
-        # Task type is now auto-detected based on bbox presence
-        # No validation needed
 
         # Validate prompt file exists
         if config.prompt and not os.path.exists(config.prompt):
@@ -266,12 +262,14 @@ class FilterChatgptAnnotator(Filter):
             self.client = None
             logger.info("Skipping OpenAI client initialization (no-ops mode)")
 
+        # Basename for JSONL `prompt_used` — always set so consumers never rely on getattr fallbacks
+        _prompt_path = (getattr(config, "prompt", None) or "").strip()
+        self.prompt_filename = os.path.basename(_prompt_path) if _prompt_path else ""
+
         # Load prompt from file
         try:
             with open(config.prompt, 'r', encoding='utf-8') as f:
                 self.prompt_text = f.read().strip()
-            # Store prompt filename for metadata
-            self.prompt_filename = os.path.basename(config.prompt)
             logger.debug(f"Loaded prompt from: {config.prompt}")
         except Exception as e:
             raise RuntimeError(f"Failed to load prompt file: {str(e)}")
@@ -307,18 +305,6 @@ class FilterChatgptAnnotator(Filter):
         self.preserve_original_format = config.preserve_original_format
         self.output_schema = config.output_schema
         self.confidence_threshold = config.confidence_threshold
-        # Auto-detect task type based on output_schema
-        self.has_bbox_schema = False
-        if self.output_schema:
-            # Check if any schema item has bbox field
-            for item_schema in self.output_schema.values():
-                if isinstance(item_schema, dict) and "bbox" in item_schema:
-                    self.has_bbox_schema = True
-                    logger.info("Auto-detected bbox schema - will generate both classification and detection datasets")
-                    break
-        
-        if not self.has_bbox_schema:
-            logger.info("No bbox schema detected - will generate classification datasets only")
 
         logger.info("FilterChatgptAnnotator setup complete.")
 
@@ -420,6 +406,7 @@ class FilterChatgptAnnotator(Filter):
                 
                 # Create results dictionary
                 results = {
+                    "schema_version": CHATTAG_OUTPUT_SCHEMA_VERSION,
                     "annotations": annotations,
                     "usage": usage,
                     "processing_time": processing_time,
@@ -436,6 +423,7 @@ class FilterChatgptAnnotator(Filter):
                 
                 # Create error results
                 results = {
+                    "schema_version": CHATTAG_OUTPUT_SCHEMA_VERSION,
                     "annotations": self._get_default_annotations(),
                     "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0},
                     "processing_time": processing_time,
@@ -587,41 +575,19 @@ class FilterChatgptAnnotator(Filter):
                 if key in annotations:
                     # Validate the annotation format
                     if isinstance(annotations[key], dict) and "present" in annotations[key] and "confidence" in annotations[key]:
-                        validated_item = {
+                        validated[key] = {
                             "present": bool(annotations[key]["present"]),
                             "confidence": float(annotations[key]["confidence"])
                         }
-                        
-                        # Add bbox if present (for detection tasks)
-                        if "bbox" in annotations[key]:
-                            bbox = annotations[key]["bbox"]
-                            if bbox is not None and isinstance(bbox, list) and len(bbox) == 4:
-                                # Validate bbox coordinates with enhanced checks
-                                if self._validate_bbox_coordinates(bbox, key):
-                                    validated_item["bbox"] = bbox
-                                else:
-                                    logger.warning(f"Invalid bbox coordinates for {key}: {bbox}")
-                                    validated_item["bbox"] = None
-                            else:
-                                validated_item["bbox"] = None
-                        
-                        validated[key] = validated_item
                     elif isinstance(annotations[key], bool):
-                        # Convert boolean to standard format
-                        validated_item = {
+                        validated[key] = {
                             "present": annotations[key],
                             "confidence": 1.0 if annotations[key] else 0.0
                         }
-                        # Add bbox as null for boolean format if schema expects bbox
-                        if self.has_bbox_schema:
-                            validated_item["bbox"] = None
-                        validated[key] = validated_item
                     else:
-                        # Use default value
-                        validated[key] = default_value
+                        validated[key] = self._default_for_schema_key(default_value)
                 else:
-                    # Use default value
-                    validated[key] = default_value
+                    validated[key] = self._default_for_schema_key(default_value)
         else:
             # No schema provided, try to normalize existing annotations
             for key, value in annotations.items():
@@ -644,61 +610,15 @@ class FilterChatgptAnnotator(Filter):
         
         return validated
 
-    def _validate_bbox_coordinates(self, bbox: list, label: str) -> bool:
-        """
-        Validate bounding box coordinates with enhanced checks.
-        
-        Args:
-            bbox: List of 4 coordinates [x_min, y_min, x_max, y_max]
-            label: Label name for logging
-            
-        Returns:
-            bool: True if bbox is valid, False otherwise
-        """
-        try:
-            # Check if all coordinates are numbers
-            if not all(isinstance(coord, (int, float)) for coord in bbox):
-                logger.warning(f"Bbox coordinates must be numbers for {label}: {bbox}")
-                return False
-            
-            x_min, y_min, x_max, y_max = bbox
-            
-            # Check if coordinates are within valid range [0, 1]
-            if not all(0 <= coord <= 1 for coord in bbox):
-                logger.warning(f"Bbox coordinates must be between 0 and 1 for {label}: {bbox}")
-                return False
-            
-            # Check if coordinates form a valid rectangle
-            if x_min >= x_max or y_min >= y_max:
-                logger.warning(f"Invalid bbox rectangle for {label}: x_min={x_min} >= x_max={x_max} or y_min={y_min} >= y_max={y_max}")
-                return False
-            
-            # Check if bbox has reasonable size (not too small or too large)
-            width = x_max - x_min
-            height = y_max - y_min
-            area = width * height
-            
-            # Minimum area threshold (0.1% of image)
-            if area < 0.001:
-                logger.warning(f"Bbox too small for {label}: area={area:.4f} < 0.001")
-                return False
-            
-            # Maximum area threshold (80% of image)
-            if area > 0.8:
-                logger.warning(f"Bbox too large for {label}: area={area:.4f} > 0.8")
-                return False
-            
-            # Check aspect ratio (not too extreme)
-            aspect_ratio = width / height if height > 0 else float('inf')
-            if aspect_ratio > 10 or aspect_ratio < 0.1:
-                logger.warning(f"Bbox aspect ratio too extreme for {label}: {aspect_ratio:.2f}")
-                return False
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"Error validating bbox for {label}: {e}")
-            return False
+    @staticmethod
+    def _default_for_schema_key(default_value: Any) -> Dict[str, Any]:
+        """Normalize output_schema entry to classification-only default."""
+        if isinstance(default_value, dict):
+            return {
+                "present": bool(default_value.get("present", False)),
+                "confidence": float(default_value.get("confidence", 0.0)),
+            }
+        return {"present": False, "confidence": 0.0}
 
     def _perform_annotation_quality_checks(self, annotations: Dict[str, Any], frame_id: str):
         """
@@ -717,33 +637,12 @@ class FilterChatgptAnnotator(Filter):
                 
                 present = data.get('present', False)
                 confidence = data.get('confidence', 0.0)
-                bbox = data.get('bbox', None)
-                
-                # Check confidence vs presence consistency
+
                 if present and confidence < 0.5:
                     quality_issues.append(f"{label}: Present but low confidence ({confidence:.2f})")
-                
+
                 if not present and confidence > 0.7:
                     quality_issues.append(f"{label}: Not present but high confidence ({confidence:.2f})")
-                
-                # Check bbox consistency with presence
-                if present and bbox is None:
-                    quality_issues.append(f"{label}: Present but no bounding box provided")
-                
-                if not present and bbox is not None:
-                    quality_issues.append(f"{label}: Not present but bounding box provided")
-                
-                # Check for overlapping bounding boxes
-                if present and bbox is not None:
-                    for other_label, other_data in annotations.items():
-                        if (other_label != label and 
-                            isinstance(other_data, dict) and 
-                            other_data.get('present', False) and 
-                            other_data.get('bbox') is not None):
-                            
-                            overlap = self._calculate_bbox_overlap(bbox, other_data['bbox'])
-                            if overlap > 0.5:  # 50% overlap threshold
-                                quality_issues.append(f"{label} and {other_label}: High bounding box overlap ({overlap:.2f})")
             
             # Log quality issues
             if quality_issues:
@@ -756,39 +655,6 @@ class FilterChatgptAnnotator(Filter):
         except Exception as e:
             logger.error(f"Error performing quality checks for frame {frame_id}: {e}")
 
-    def _calculate_bbox_overlap(self, bbox1: list, bbox2: list) -> float:
-        """
-        Calculate the overlap ratio between two bounding boxes.
-        
-        Args:
-            bbox1: First bounding box [x_min, y_min, x_max, y_max]
-            bbox2: Second bounding box [x_min, y_min, x_max, y_max]
-            
-        Returns:
-            float: Overlap ratio (0.0 to 1.0)
-        """
-        try:
-            x1_min, y1_min, x1_max, y1_max = bbox1
-            x2_min, y2_min, x2_max, y2_max = bbox2
-            
-            # Calculate intersection
-            x_overlap = max(0, min(x1_max, x2_max) - max(x1_min, x2_min))
-            y_overlap = max(0, min(y1_max, y2_max) - max(y1_min, y2_min))
-            intersection = x_overlap * y_overlap
-            
-            # Calculate union
-            area1 = (x1_max - x1_min) * (y1_max - y1_min)
-            area2 = (x2_max - x2_min) * (y2_max - y2_min)
-            union = area1 + area2 - intersection
-            
-            if union == 0:
-                return 0.0
-            
-            return intersection / union
-            
-        except Exception:
-            return 0.0
-
     def _get_default_annotations(self) -> Dict[str, Any]:
         """
         Get default annotations when processing fails.
@@ -797,9 +663,11 @@ class FilterChatgptAnnotator(Filter):
             Default annotations dictionary
         """
         if self.output_schema:
-            return self.output_schema.copy()
-        else:
-            return {}
+            return {
+                k: self._default_for_schema_key(v)
+                for k, v in self.output_schema.items()
+            }
+        return {}
 
     def _save_frame_results(self, frame_id: str, results: Dict[str, Any], image_path: str = None):
         """
@@ -813,10 +681,11 @@ class FilterChatgptAnnotator(Filter):
         try:
             # Create dataset_langchain format
             dataset_entry = {
+                "schema_version": results["schema_version"],
                 "image": image_path or f"{frame_id}.jpg",
                 "labels": results.get("annotations", {}),
                 "usage": results.get("usage", {}),
-                "prompt_used": getattr(self, 'prompt_filename', 'unknown')
+                "prompt_used": self.prompt_filename
             }
             
             # Save as JSONL (one line per entry)
@@ -1087,218 +956,40 @@ class FilterChatgptAnnotator(Filter):
         except Exception as e:
             logger.error(f"Failed to generate balanced datasets: {str(e)}")
 
-    def _generate_detection_datasets(self):
-        """
-        Generate object detection datasets from saved JSONL file.
-        Creates datasets in COCO format for object detection training.
-        """
-        try:
-            logger.info("Generating object detection datasets in COCO format...")
-            
-            # Read JSONL file
-            jsonl_file = self.output_dir / "labels.jsonl"
-            if not jsonl_file.exists():
-                logger.warning("No labels.jsonl file found in output directory")
-                return
-            
-            # Read all records from JSONL
-            records = []
-            with open(jsonl_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        records.append(json.loads(line.strip()))
-            
-            if not records:
-                logger.warning("No records found in JSONL file")
-                return
-            
-            # Get labels from all records
-            labels = set()
-            for record in records:
-                labels.update(record["labels"].keys())
-            
-            if not labels:
-                logger.warning("No labels found in records")
-                return
-            
-            # Create detection datasets directory
-            detection_datasets_dir = self.output_dir / "detection_datasets"
-            detection_datasets_dir.mkdir(exist_ok=True)
-            
-            # Initialize COCO format structure
-            coco_dataset = {
-                "info": {
-                    "description": "ChatGPT Annotator Detection Dataset",
-                    "version": "1.0",
-                    "year": 2024,
-                    "contributor": "ChatGPT Annotator Filter",
-                    "date_created": time.strftime("%Y-%m-%d %H:%M:%S")
-                },
-                "licenses": [
-                    {
-                        "id": 1,
-                        "name": "Unknown",
-                        "url": ""
-                    }
-                ],
-                "images": [],
-                "annotations": [],
-                "categories": []
-            }
-            
-            # Create categories
-            for idx, label in enumerate(sorted(labels), 1):
-                coco_dataset["categories"].append({
-                    "id": idx,
-                    "name": label,
-                    "supercategory": "object"
-                })
-            
-            # Create category mapping
-            category_mapping = {label: idx for idx, label in enumerate(sorted(labels), 1)}
-            
-            # Process each record
-            annotation_id = 1
-            for image_id, record in enumerate(records, 1):
-                # Extract image information
-                image_path = record["image"]
-                filename = os.path.basename(image_path)
-                
-                # Get image dimensions (we'll need to read the actual image)
-                try:
-                    import cv2
-                    full_image_path = self.output_dir / image_path
-                    if full_image_path.exists():
-                        img = cv2.imread(str(full_image_path))
-                        if img is not None:
-                            height, width = img.shape[:2]
-                        else:
-                            # Fallback dimensions if image can't be read
-                            width, height = 640, 480
-                    else:
-                        # Fallback dimensions if image doesn't exist
-                        width, height = 640, 480
-                except Exception as e:
-                    logger.warning(f"Could not read image dimensions for {filename}: {e}")
-                    width, height = 640, 480
-                
-                # Add image to COCO dataset
-                coco_dataset["images"].append({
-                    "id": image_id,
-                    "width": width,
-                    "height": height,
-                    "file_name": filename,
-                    "license": 1,
-                    "flickr_url": "",
-                    "coco_url": "",
-                    "date_captured": 0
-                })
-                
-                # Process annotations for this image
-                for label_name, label_data in record["labels"].items():
-                    if (label_data.get('present', False) and 
-                        label_data.get('confidence', 0.0) >= self.confidence_threshold and
-                        'bbox' in label_data and 
-                        label_data['bbox'] is not None):
-                        
-                        # Convert normalized bbox to COCO format
-                        x_min_norm, y_min_norm, x_max_norm, y_max_norm = label_data['bbox']
-                        
-                        # Convert to absolute coordinates
-                        x_min = x_min_norm * width
-                        y_min = y_min_norm * height
-                        bbox_width = (x_max_norm - x_min_norm) * width
-                        bbox_height = (y_max_norm - y_min_norm) * height
-                        
-                        # COCO format: [x, y, width, height] (top-left corner + width/height)
-                        bbox = [x_min, y_min, bbox_width, bbox_height]
-                        area = bbox_width * bbox_height
-                        
-                        # Add annotation to COCO dataset
-                        coco_dataset["annotations"].append({
-                            "id": annotation_id,
-                            "image_id": image_id,
-                            "category_id": category_mapping[label_name],
-                            "segmentation": [],
-                            "area": area,
-                            "bbox": bbox,
-                            "iscrowd": 0
-                        })
-                        
-                        annotation_id += 1
-            
-            # Save COCO dataset
-            coco_file = detection_datasets_dir / "annotations.json"
-            with open(coco_file, 'w', encoding='utf-8') as f:
-                json.dump(coco_dataset, f, indent=2, ensure_ascii=False)
-            
-            # Generate summary report
-            summary = {
-                "task_type": "object_detection",
-                "format": "COCO",
-                "total_classes": len(labels),
-                "classes": sorted(list(labels)),
-                "category_mapping": category_mapping,
-                "total_images": len(records),
-                "total_annotations": annotation_id - 1,
-                "output_directory": str(detection_datasets_dir),
-                "confidence_threshold": self.confidence_threshold,
-                "coco_file": str(coco_file),
-                "generated_at": time.time()
-            }
-            
-            summary_file = detection_datasets_dir / "_summary_report.json"
-            with open(summary_file, 'w', encoding='utf-8') as f:
-                json.dump(summary, f, indent=2, ensure_ascii=False)
-            
-            logger.info(f"COCO format detection dataset generated successfully in: {detection_datasets_dir}")
-            logger.info(f"COCO annotations file: {coco_file}")
-            logger.info(f"Summary report: {summary_file}")
-            logger.info(f"Total images: {len(records)}, Total annotations: {annotation_id - 1}")
-            
-        except Exception as e:
-            logger.error(f"Failed to generate detection datasets: {str(e)}")
-
     def _generate_multilabel_coco_datasets(self):
         """
-        Generate multilabel COCO datasets from saved JSONL file.
-        Creates datasets where each present label gets a bounding box covering the entire image.
-        This is useful for multilabel classification tasks that need COCO format.
+        Build a COCO-style JSON from labels.jsonl for multilabel workflows.
+        Each positive label (per confidence threshold) gets one full-image box in COCO [x,y,w,h].
         """
         try:
             logger.info("Generating multilabel COCO datasets...")
-            
-            # Read JSONL file
+
             jsonl_file = self.output_dir / "labels.jsonl"
             if not jsonl_file.exists():
                 logger.warning("No labels.jsonl file found in output directory")
                 return
-            
-            # Read all records from JSONL
+
             records = []
             with open(jsonl_file, 'r', encoding='utf-8') as f:
                 for line in f:
                     if line.strip():
                         records.append(json.loads(line.strip()))
-            
+
             if not records:
                 logger.warning("No records found in JSONL file")
                 return
-            
-            # Get labels from all records
+
             labels = set()
             for record in records:
                 labels.update(record["labels"].keys())
-            
+
             if not labels:
                 logger.warning("No labels found in records")
                 return
-            
-            # Create multilabel datasets directory
+
             multilabel_datasets_dir = self.output_dir / "multilabel_datasets"
             multilabel_datasets_dir.mkdir(exist_ok=True)
-            
-            # Initialize COCO format structure
+
             coco_dataset = {
                 "info": {
                     "description": "ChatGPT Annotator Multilabel Dataset",
@@ -1307,55 +998,53 @@ class FilterChatgptAnnotator(Filter):
                     "contributor": "ChatGPT Annotator Filter",
                     "date_created": time.strftime("%Y-%m-%d %H:%M:%S")
                 },
-                "licenses": [
-                    {
-                        "id": 1,
-                        "name": "Unknown",
-                        "url": ""
-                    }
-                ],
+                "licenses": [{"id": 1, "name": "Unknown", "url": ""}],
                 "images": [],
                 "annotations": [],
                 "categories": []
             }
-            
-            # Create categories
+
             for idx, label in enumerate(sorted(labels), 1):
                 coco_dataset["categories"].append({
                     "id": idx,
                     "name": label,
                     "supercategory": "object"
                 })
-            
-            # Create category mapping
+
             category_mapping = {label: idx for idx, label in enumerate(sorted(labels), 1)}
-            
-            # Process each record
+
+            try:
+                import cv2
+            except ImportError:
+                cv2 = None
+
             annotation_id = 1
             for image_id, record in enumerate(records, 1):
-                # Extract image information
                 image_path = record["image"]
                 filename = os.path.basename(image_path)
-                
-                # Get image dimensions (we'll need to read the actual image)
-                try:
-                    import cv2
-                    full_image_path = self.output_dir / image_path
-                    if full_image_path.exists():
-                        img = cv2.imread(str(full_image_path))
-                        if img is not None:
-                            height, width = img.shape[:2]
+
+                width, height = 640, 480
+                if cv2 is not None:
+                    try:
+                        full_image_path = self.output_dir / image_path
+                        if full_image_path.exists():
+                            img = cv2.imread(str(full_image_path))
+                            if img is not None:
+                                height, width = img.shape[:2]
+                            else:
+                                logger.warning(
+                                    "cv2.imread returned no data for %s (corrupt or unsupported format); "
+                                    "using fallback dimensions 640x480 for COCO export",
+                                    filename,
+                                )
                         else:
-                            # Fallback dimensions if image can't be read
-                            width, height = 640, 480
-                    else:
-                        # Fallback dimensions if image doesn't exist
-                        width, height = 640, 480
-                except Exception as e:
-                    logger.warning(f"Could not read image dimensions for {filename}: {e}")
-                    width, height = 640, 480
-                
-                # Add image to COCO dataset
+                            logger.warning(
+                                "Image not found at %s for COCO export; using fallback dimensions 640x480",
+                                full_image_path,
+                            )
+                    except Exception as e:
+                        logger.warning(f"Could not read image dimensions for {filename}: {e}")
+
                 coco_dataset["images"].append({
                     "id": image_id,
                     "width": width,
@@ -1366,18 +1055,12 @@ class FilterChatgptAnnotator(Filter):
                     "coco_url": "",
                     "date_captured": 0
                 })
-                
-                # Process annotations for this image - create full image bbox for each present label
+
                 for label_name, label_data in record["labels"].items():
-                    if (label_data.get('present', False) and 
-                        label_data.get('confidence', 0.0) >= self.confidence_threshold):
-                        
-                        # Create bounding box that covers the entire image
-                        # COCO format: [x, y, width, height] (top-left corner + width/height)
-                        bbox = [0, 0, width, height]  # Full image bbox
+                    if (label_data.get('present', False) and
+                            label_data.get('confidence', 0.0) >= self.confidence_threshold):
+                        bbox = [0, 0, width, height]
                         area = width * height
-                        
-                        # Add annotation to COCO dataset
                         coco_dataset["annotations"].append({
                             "id": annotation_id,
                             "image_id": image_id,
@@ -1387,15 +1070,12 @@ class FilterChatgptAnnotator(Filter):
                             "bbox": bbox,
                             "iscrowd": 0
                         })
-                        
                         annotation_id += 1
-            
-            # Save COCO dataset
+
             coco_file = multilabel_datasets_dir / "annotations.json"
             with open(coco_file, 'w', encoding='utf-8') as f:
                 json.dump(coco_dataset, f, indent=2, ensure_ascii=False)
-            
-            # Generate summary report
+
             summary = {
                 "task_type": "multilabel_classification",
                 "format": "COCO",
@@ -1411,16 +1091,13 @@ class FilterChatgptAnnotator(Filter):
                 "description": "Each present label gets a bounding box covering the entire image",
                 "generated_at": time.time()
             }
-            
+
             summary_file = multilabel_datasets_dir / "_summary_report.json"
             with open(summary_file, 'w', encoding='utf-8') as f:
                 json.dump(summary, f, indent=2, ensure_ascii=False)
-            
-            logger.info(f"Multilabel COCO dataset generated successfully in: {multilabel_datasets_dir}")
-            logger.info(f"COCO annotations file: {coco_file}")
-            logger.info(f"Summary report: {summary_file}")
-            logger.info(f"Total images: {len(records)}, Total annotations: {annotation_id - 1}")
-            
+
+            logger.info(f"Multilabel COCO dataset generated in: {multilabel_datasets_dir}")
+
         except Exception as e:
             logger.error(f"Failed to generate multilabel COCO datasets: {str(e)}")
 
@@ -1433,19 +1110,9 @@ class FilterChatgptAnnotator(Filter):
         # Generate datasets if save_frames is enabled and output_dir exists
         # This should happen regardless of no_ops mode
         if self.save_frames and self.output_dir and self.output_dir.exists():
-            # Always generate classification datasets
             self._generate_binary_datasets()
-            
-            # Generate detection datasets only if bbox schema is present
-            if self.has_bbox_schema:
-                self._generate_detection_datasets()
-                # Also generate multilabel COCO datasets (full image bbox for each present label)
-                self._generate_multilabel_coco_datasets()
-            
-            # ALWAYS generate multilabel datasets when there are multiple classes
-            # This ensures multilabel datasets are created regardless of bbox schema
             if self.output_schema and len(self.output_schema) > 1:
-                logger.info("Multiple classes detected - generating multilabel datasets...")
+                logger.info("Multiple classes detected — generating multilabel COCO export...")
                 self._generate_multilabel_coco_datasets()
         
         # Clean up resources

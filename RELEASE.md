@@ -3,8 +3,19 @@ ChatTag filter release notes
 
 ## [Unreleased]
 
+## v0.2.0 - 2026-04-02
+
+### Added
+- Standardized OpenFilter output: `schema_version` (`"1.0"`) on stream metadata (`meta.chatgpt_annotator`) and on each `labels.jsonl` line for downstream pipeline integration.
+- Documented output contract in `docs/output_contract.md` and JSON Schema in `schemas/chattag_output.schema.json`.
+
+### Changed
+- Annotation payloads are classification-only: each label is `present` and `confidence`; extra fields from the model are not persisted.
+- Shutdown: binary datasets from `labels.jsonl`; multilabel COCO export (`multilabel_datasets/`) when `output_schema` has more than one label (full-image boxes per active label).
+
 ## v0.1.2 - 2025-10-09
-### Added 
+
+### Added
 - Added automatic multilabel COCO dataset generation with full-image bounding boxes when bbox schema is present.
 
 ## v0.1.1 - 2025-09-29
