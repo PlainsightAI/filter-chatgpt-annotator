@@ -2,8 +2,8 @@
 # Repo-specific variables
 # ---------------------------------
 
-IMAGE ?= us-west1-docker.pkg.dev/plainsightai-prod/oci/filter-chatgpt-annotator
-MODEL_IMAGE ?= us-west1-docker.pkg.dev/plainsightai-prod/oci/filter-chatgpt-annotator-model
+IMAGE ?= plainsightai/openfilter-chatgpt-annotator
+MODEL_IMAGE ?= plainsightai/openfilter-chatgpt-annotator-model
 
 # Define these variables for consistency in the repo
 REPO_NAME ?= filter-chatgpt-annotator
