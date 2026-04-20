@@ -3,6 +3,16 @@ ChatTag filter release notes
 
 ## [Unreleased]
 
+## v0.2.1 - 2026-04-14
+
+### Changed
+- Add CI/CD workflows: create-release.yaml (Docker Hub publishing), ci.yaml (PR testing), security-scan.yaml (Grype)
+- Bump openfilter dependency to >=0.1.27
+- Extend Python support to 3.13
+- Update docker-compose.yaml image tags to 0.1.27
+- Update Makefile IMAGE to Docker Hub path
+
+
 ## v0.2.0 - 2026-04-02
 
 ### Added
