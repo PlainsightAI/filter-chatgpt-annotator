@@ -3,6 +3,13 @@ ChatTag filter release notes
 
 ## [Unreleased]
 
+## v0.2.2 - 2026-04-20
+
+### Changed
+- Remove redundant ci.yaml (shared workflow handles PR testing)
+- Add push + pull_request triggers to create-release.yaml
+
+
 ## v0.2.1 - 2026-04-14
 
 ### Changed
