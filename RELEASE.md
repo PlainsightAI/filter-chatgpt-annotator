@@ -13,6 +13,10 @@ ChatTag filter release notes
 
 ## [Unreleased]
 
+### Changed
+
+- Bump openfilter to 1.1.0
+
 ## v0.2.2 - 2026-04-20
 
 ### Changed
