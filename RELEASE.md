@@ -1,4 +1,14 @@
-# v0.2.3
+# v0.2.4
+
+## v0.2.4 - 2026-05-25
+
+### Fixed
+- Security: mask `chatgpt_api_key` in the OpenFilter framework's post-normalize config log. The framework's built-in scrubber only hides URI-style `user:pass` credentials, so loose API keys were being emitted verbatim by `openfilter.filter_runtime.filter.Filter.__init__`. The key is now wrapped in a `SecretValue` holder at the tail of `normalize_config`, so framework `str(config)` paths render `***masked***`. Regression test covers `repr`/`str`/`format`. Operators running prior versions with a real key should rotate it.
+
+### Changed
+- Scripts: `filter_pet_classification.py` and `filter_multilabel.py` now accept `IMAGE_PATH` (auto-selecting `ImageIn` vs `VideoIn`), matching `filter_food_annotation.py`.
+- Docs: drop references to example scripts that do not exist in this repo (`filter_medical_imaging.py`, `filter_industrial_quality.py`, `filter_simple_salad.py`, `filter_annotation.py`) from `README.md` and `scripts/README.md`.
+- Bump openfilter to 1.1.0 (carried from the previously unreleased entry; merged in #12, first shipped here).
 
 ## v0.2.3 - 2026-04-23
 
@@ -12,10 +22,6 @@
 ChatTag filter release notes
 
 ## [Unreleased]
-
-### Changed
-
-- Bump openfilter to 1.1.0
 
 ## v0.2.2 - 2026-04-20
 
