@@ -354,39 +354,17 @@ export FILTER_OUTPUT_SCHEMA='{"cat": {"present": false, "confidence": 0.0}, "dog
 python scripts/filter_pet_classification.py
 ```
 
-### 3. Medical Imaging
-Detect medical conditions (research/educational only):
+### 3. Multilabel Annotation (COCO export)
+Multilabel classification with per-label binary datasets plus a COCO multilabel export:
 
 ```bash
-export FILTER_PROMPT="./prompts/medical_imaging_prompt.txt"
-export FILTER_OUTPUT_SCHEMA='{"tumor": {"present": false, "confidence": 0.0}, "calcification": {"present": false, "confidence": 0.0}}'
-python scripts/filter_medical_imaging.py
+export FILTER_PROMPT="./prompts/salad_prompt_multilabel.txt"
+export FILTER_OUTPUT_SCHEMA='{"avocado": {"present": false, "confidence": 0.0}, "fish": {"present": false, "confidence": 0.0}, "chicken": {"present": false, "confidence": 0.0}}'
+python scripts/filter_multilabel.py
 ```
 
-### 4. Industrial Quality
-Detect defects in assembly line images:
-
-```bash
-export FILTER_PROMPT="./prompts/industrial_quality_prompt.txt"
-export FILTER_SAVE_FRAMES="true"
-export FILTER_OUTPUT_DIR="./quality_results"
-python scripts/filter_industrial_quality.py
-```
-
-### 5. Pipeline Integration with Topic Forwarding
-Preserve main topic for downstream processing:
-
-```bash
-export FILTER_PROMPT="./prompts/annotation_prompt.txt"
-export FILTER_FORWARD_MAIN="true"  # Preserve main topic
-export FILTER_OUTPUT_SCHEMA='{"item1": {"present": false, "confidence": 0.0}, "item2": {"present": false, "confidence": 0.0}}'
-python scripts/filter_annotation.py
-```
-
-This configuration ensures that:
-- The original main frame is preserved for downstream filters
-- Processed results are available alongside the original data
-- Pipeline compatibility is maintained
+### 4. Pipeline Integration with Topic Forwarding
+Set `forward_main=True` (or `FILTER_FORWARD_MAIN=true`) on `FilterChatgptAnnotator` to keep the original `main` topic alongside the processed output, so downstream filters in a `Filter.run_multi` pipeline can consume both.
 
 ## Prompt Format & Importance
 
@@ -456,12 +434,11 @@ Full contract: [docs/output_contract.md](docs/output_contract.md).
 
 The `scripts/` directory contains example implementations for different use cases:
 
-- **`filter_food_annotation.py`**: Example food item detection
+- **`filter_food_annotation.py`**: Food ingredient detection (salad ingredients)
 - **`filter_pet_classification.py`**: Cat/dog classification
-- **`filter_medical_imaging.py`**: Medical image analysis (research only)
-- **`filter_industrial_quality.py`**: Quality inspection and defect detection
+- **`filter_multilabel.py`**: Multilabel annotation with COCO export
 
-See [scripts/README.md](scripts/README.md) for detailed usage instructions.
+All three accept either `VIDEO_PATH` or `IMAGE_PATH` and auto-select `VideoIn` vs `ImageIn`. See [scripts/README.md](scripts/README.md) for detailed usage.
 
 ## Cost Optimization
 
@@ -486,14 +463,13 @@ filter-chatgpt-annotator/
 ├── scripts/                   # Example usage scripts
 │   ├── filter_food_annotation.py
 │   ├── filter_pet_classification.py
-│   ├── filter_medical_imaging.py
-│   ├── filter_industrial_quality.py
+│   ├── filter_multilabel.py
 │   └── README.md
 ├── prompts/                   # Example prompt files
 │   ├── food_annotation_prompt.txt
 │   ├── pet_classification_prompt.txt
-│   ├── medical_imaging_prompt.txt
-│   └── industrial_quality_prompt.txt
+│   ├── salad_prompt_multilabel.txt
+│   └── ...
 ├── tests/                     # Test files
 ├── env.example               # Environment configuration example
 └── pyproject.toml           # Project dependencies

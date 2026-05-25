@@ -10,12 +10,71 @@ import io
 
 from openfilter.filter_runtime.filter import FilterConfig, Filter, Frame
 
-__all__ = ['FilterChatgptAnnotatorConfig', 'FilterChatgptAnnotator', 'CHATTAG_OUTPUT_SCHEMA_VERSION']
+__all__ = ['FilterChatgptAnnotatorConfig', 'FilterChatgptAnnotator', 'CHATTAG_OUTPUT_SCHEMA_VERSION', 'SecretValue']
 
 logger = logging.getLogger(__name__)
 
 # OpenFilter / JSONL output contract (see docs/output_contract.md)
 CHATTAG_OUTPUT_SCHEMA_VERSION = "1.0"
+
+
+class SecretValue:
+    """Holds a secret string whose value is hidden from repr/str/format.
+
+    The OpenFilter framework logs the whole filter config via ``str(config)``
+    immediately after ``normalize_config`` returns. Plain strings get inlined
+    verbatim, so wrapping the API key in this opaque holder prevents the key
+    from leaking into stdout/log files. Call ``.get()`` to retrieve the value
+    at the boundary that actually needs it (e.g. when constructing the OpenAI
+    client).
+    """
+
+    __slots__ = ("_value",)
+
+    _MASK = "***masked***"
+
+    def __init__(self, value: str = ""):
+        self._value = str(value)
+
+    def get(self) -> str:
+        return self._value
+
+    def __bool__(self) -> bool:
+        return bool(self._value)
+
+    def __len__(self) -> int:
+        return len(self._value)
+
+    def __eq__(self, other) -> bool:
+        if isinstance(other, SecretValue):
+            return self._value == other._value
+        if isinstance(other, str):
+            return self._value == other
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self._value)
+
+    def __repr__(self) -> str:
+        return f"'{self._MASK}'"
+
+    def __str__(self) -> str:
+        return self._MASK
+
+    def __format__(self, spec: str) -> str:
+        return self._MASK
+
+    # Pickle support — explicit so __slots__ classes survive multiprocess spawn.
+    def __getstate__(self):
+        return self._value
+
+    def __setstate__(self, state):
+        self._value = state
+
+
+def _unwrap_secret(value) -> str:
+    """Return the raw string whether ``value`` is a SecretValue or a plain str."""
+    return value.get() if isinstance(value, SecretValue) else (value or "")
 
 
 class FilterChatgptAnnotatorConfig(FilterConfig):
@@ -157,9 +216,12 @@ class FilterChatgptAnnotator(Filter):
         # Validate required parameters
         if not config.chatgpt_api_key:
             raise ValueError("chatgpt_api_key is required (set FILTER_CHATGPT_API_KEY)")
-        
+
         if not config.prompt:
             raise ValueError("prompt is required (set FILTER_PROMPT)")
+
+        # Unwrap if caller already passed a SecretValue so we always validate against the raw string above.
+        config.chatgpt_api_key = _unwrap_secret(config.chatgpt_api_key)
 
         # Validate parameter ranges
         if config.max_tokens <= 0:
@@ -181,6 +243,11 @@ class FilterChatgptAnnotator(Filter):
         if config.prompt and not os.path.exists(config.prompt):
             raise FileNotFoundError(f"Prompt file not found: {config.prompt}")
 
+        # Wrap the API key right before returning so the framework's post-normalize
+        # ``str(config)`` log (in openfilter.filter_runtime.filter.Filter.__init__)
+        # sees the masked repr instead of the raw key.
+        config.chatgpt_api_key = SecretValue(config.chatgpt_api_key)
+
         # Log normalized config with masked API key
         masked_config = cls._mask_api_key_in_config(config)
         logger.debug(f"Normalized config: {masked_config}")
@@ -201,7 +268,7 @@ class FilterChatgptAnnotator(Filter):
             'id': config.id,
             'sources': config.sources,
             'outputs': config.outputs,
-            'chatgpt_api_key': cls._mask_api_key(config.chatgpt_api_key),
+            'chatgpt_api_key': cls._mask_api_key(_unwrap_secret(config.chatgpt_api_key)),
             'prompt': config.prompt,
             'save_frames': config.save_frames,
             'output_schema': config.output_schema,
@@ -252,7 +319,7 @@ class FilterChatgptAnnotator(Filter):
         if not self.no_ops:
             try:
                 from openai import OpenAI
-                self.client = OpenAI(api_key=config.chatgpt_api_key)
+                self.client = OpenAI(api_key=_unwrap_secret(config.chatgpt_api_key))
                 logger.info(f"Initialized OpenAI client with model: {config.chatgpt_model}")
             except ImportError:
                 raise ImportError("openai package is required. Install with: pip install openai")

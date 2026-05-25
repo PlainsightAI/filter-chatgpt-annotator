@@ -2,42 +2,28 @@
 
 This directory contains example scripts demonstrating how to use the ChatTag with different types of image annotation tasks.
 
+All scripts accept either `VIDEO_PATH` (a video file) or `IMAGE_PATH` (an image file or directory) and auto-select `VideoIn` vs `ImageIn` accordingly.
+
 ## Available Scripts
 
-### 1. Simple Salad Classification (`filter_simple_salad.py`)
-Analyzes salad images to detect avocado, lettuce, and tomato with confidence scores.
+### 1. Food Annotation (`filter_food_annotation.py`)
+Detects salad ingredients (avocado, lettuce, tomato) with confidence scores.
 
-**Use Case**: Simple salad analysis, basic ingredient detection
-**Prompt**: `./prompts/simple_salad_prompt.txt`
-**Output Schema**: Detects avocado, lettuce, tomato (3 ingredients only)
-**Features**: 
-- Supports both video and image input
-- Automatic input source detection (VideoIn vs ImageIn)
-- Binary classification datasets only
-- Web visualization with Webvis
-
-### 2. Food Annotation (`filter_food_annotation.py`)
-Analyzes food images to detect salad ingredients with confidence scores.
-
-**Use Case**: Food analysis, nutrition tracking, ingredient detection
 **Prompt**: `./prompts/food_annotation_prompt.txt`
-**Output Schema**: Detects food ingredients (avocado, lettuce, tomato, etc.)
-**Features**: 
-- Supports both video and image input
-- Automatic input source detection (VideoIn vs ImageIn)
-- No-ops mode enabled by default for testing
-- Web visualization with Webvis
+**Output Schema**: avocado, lettuce, tomato
 
-### 3. Pet Classification (`filter_pet_classification.py`)
-Classifies images to detect presence of cats and dogs.
+### 2. Pet Classification (`filter_pet_classification.py`)
+Detects presence of cats and dogs.
 
-**Use Case**: Pet detection, animal classification, security monitoring
 **Prompt**: `./prompts/pet_classification_prompt.txt`
-**Output Schema**: Detects cats and dogs with confidence scores
-**Features**:
-- Video input processing
-- Optimized for simple classification (lower token limits)
-- Web visualization with Webvis
+**Output Schema**: cat, dog
+**Notes**: Lower token limits / smaller `max_image_size` defaults tuned for simple classification.
+
+### 3. Multilabel Annotation (`filter_multilabel.py`)
+Multilabel classification (e.g. avocado, fish, chicken). Emits a COCO export under `multilabel_datasets/` in addition to the per-label binary datasets.
+
+**Prompt**: `./prompts/salad_prompt_multilabel.txt`
+**Output Schema**: avocado, fish, chicken
 
 ## Usage
 
@@ -88,28 +74,32 @@ export FILTER_RECURSIVE="false"  # Optional: scan subdirectories
 python scripts/filter_food_annotation.py
 ```
 
-#### Pet Classification Example:
+#### Pet Classification Example (Video):
 ```bash
-# Set up environment
 export FILTER_CHATGPT_API_KEY="your_api_key"
 export FILTER_PROMPT="./prompts/pet_classification_prompt.txt"
 export VIDEO_PATH="/path/to/pet_video.mp4"
 
-# Run the script
 python scripts/filter_pet_classification.py
 ```
 
-#### Industrial Quality Inspection Example:
+#### Pet Classification Example (Image):
 ```bash
-# Set up environment
 export FILTER_CHATGPT_API_KEY="your_api_key"
-export FILTER_PROMPT="./prompts/industrial_quality_prompt.txt"
-export VIDEO_PATH="/path/to/industrial_video.mp4"
-export FILTER_SAVE_FRAMES="true"
-export FILTER_OUTPUT_DIR="./quality_results"
+export FILTER_PROMPT="./prompts/pet_classification_prompt.txt"
+export IMAGE_PATH="/path/to/pet_image.jpg"
 
-# Run the script
-python scripts/filter_industrial_quality.py
+python scripts/filter_pet_classification.py
+```
+
+#### Multilabel Annotation Example:
+```bash
+export FILTER_CHATGPT_API_KEY="your_api_key"
+export FILTER_PROMPT="./prompts/salad_prompt_multilabel.txt"
+export IMAGE_PATH="/path/to/food_images"   # or VIDEO_PATH=/path/to/video.mp4
+export FILTER_SAVE_FRAMES="true"
+
+python scripts/filter_multilabel.py
 ```
 
 ## Configuration Options
@@ -194,17 +184,17 @@ export FILTER_SAVE_FRAMES="true"
 python scripts/filter_pet_classification.py
 ```
 
-### Example 3: Quality Inspection with Different File Types
+### Example 3: Multilabel COCO Export
 ```bash
-# Process mixed file types for quality inspection
+# Process a directory and emit per-label binary + COCO multilabel datasets
 export FILTER_CHATGPT_API_KEY="your_api_key"
-export FILTER_PROMPT="./prompts/industrial_quality_prompt.txt"
-export IMAGE_PATH="/path/to/product_images"
-export IMAGE_PATTERN="*.{jpg,png}"  # Multiple file types
-export FILTER_MAX_IMAGE_SIZE="1024"  # Higher resolution for quality inspection
+export FILTER_PROMPT="./prompts/salad_prompt_multilabel.txt"
+export IMAGE_PATH="/path/to/food_images"
+export IMAGE_PATTERN="jpg"
 export FILTER_SAVE_FRAMES="true"
+export FILTER_OUTPUT_DIR="./multilabel_results"
 
-python scripts/filter_industrial_quality.py
+python scripts/filter_multilabel.py
 ```
 
 ### Example 4: Single Image Processing

@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import Mock, patch
 import numpy as np
 
-from filter_chatgpt_annotator.filter import FilterChatgptAnnotator, FilterChatgptAnnotatorConfig
+from filter_chatgpt_annotator.filter import FilterChatgptAnnotator, FilterChatgptAnnotatorConfig, SecretValue
 from openfilter.filter_runtime.filter import Frame
 
 logger = logging.getLogger(__name__)
@@ -343,7 +343,8 @@ class TestFilterChatgptAnnotator(unittest.TestCase):
             normalized_config = FilterChatgptAnnotator.normalize_config(config)
             
             # Verify environment variables were applied
-            self.assertEqual(normalized_config.chatgpt_api_key, "env-api-key")
+            # chatgpt_api_key is wrapped in SecretValue post-normalize; compare the unwrapped value.
+            self.assertEqual(normalized_config.chatgpt_api_key.get(), "env-api-key")
             self.assertEqual(normalized_config.forward_main, True)
             self.assertEqual(normalized_config.no_ops, True)
             
@@ -352,6 +353,34 @@ class TestFilterChatgptAnnotator(unittest.TestCase):
             for key in ["FILTER_CHATGPT_API_KEY", "FILTER_FORWARD_MAIN", "FILTER_NO_OPS"]:
                 if key in os.environ:
                     del os.environ[key]
+
+    def test_api_key_not_leaked_by_repr_or_str(self):
+        """After normalize_config, the API key must not appear in repr/str/format output.
+
+        Regression for the framework-level log
+        (openfilter.filter_runtime.filter.Filter.__init__) which serializes the
+        whole config via ``str(...)`` right after ``normalize_config`` returns.
+        """
+        secret = "sk-proj-DO-NOT-LEAK-this-secret-value-1234567890"
+        config = FilterChatgptAnnotatorConfig(
+            chatgpt_api_key=secret,
+            prompt=self.prompt_file,
+            output_schema={"item1": {"present": False, "confidence": 0.0}},
+            save_frames=False,
+            no_ops=True,
+        )
+
+        normalized = FilterChatgptAnnotator.normalize_config(config)
+
+        # The key is wrapped, but functional access still returns the real value.
+        self.assertIsInstance(normalized.chatgpt_api_key, SecretValue)
+        self.assertEqual(normalized.chatgpt_api_key.get(), secret)
+
+        # No serialization path used by stdlib/openfilter should reveal the key.
+        for rendered in (repr(normalized), str(normalized), repr(normalized.chatgpt_api_key),
+                         str(normalized.chatgpt_api_key), f"{normalized.chatgpt_api_key}",
+                         f"{normalized.chatgpt_api_key!r}"):
+            self.assertNotIn(secret, rendered)
 
 
 try:
