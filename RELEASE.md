@@ -1,6 +1,6 @@
-# v1.0.0
+# v0.3.0
 
-## v1.0.0 - 2026-05-25
+## v0.3.0 - 2026-05-25
 
 ### Added
 - LangChain backend — `FilterChatTag` now talks to any LangChain-supported chat model (OpenAI, Google Gemini, Anthropic Claude, Ollama, …) via `init_chat_model`. All four providers ship in the default install.
@@ -18,7 +18,7 @@
 - Replaced `openai>=1.0.0` dependency with `langchain` + `langchain-openai` + `langchain-google-genai` + `langchain-anthropic` + `langchain-ollama` + `pydantic`.
 
 ### Unchanged
-- PyPI distribution name remains `filter-chatgpt-annotator` (`pip install filter-chatgpt-annotator==1.0.0`).
+- PyPI distribution name remains `filter-chatgpt-annotator` (`pip install filter-chatgpt-annotator==0.3.0`).
 - GitHub repository URL.
 
 ## v0.2.3 - 2026-04-23

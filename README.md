@@ -8,7 +8,7 @@
 
 `FilterChatTag` is an OpenFilter that sends each video/image frame to a multimodal chat model and attaches structured annotations (`{present, confidence}` per label) to the frame metadata. Built on top of LangChain's `init_chat_model`, so any LangChain-supported chat model with vision can be plugged in.
 
-> **Breaking change in v1.0.0** — this filter was previously published as `filter-chatgpt-annotator` / `FilterChatgptAnnotator`. See [MIGRATION.md](MIGRATION.md) for the rename map.
+> **Breaking change in v0.3.0** — this filter was previously published as `filter-chatgpt-annotator` / `FilterChatgptAnnotator`. See [MIGRATION.md](MIGRATION.md) for the rename map.
 
 ## Features
 
@@ -194,7 +194,7 @@ Full contract: [docs/output_contract.md](docs/output_contract.md).
 
 ```
 filter-chatgpt-annotator/        # repo root, also the PyPI distribution name
-├── filter_chattag/                 # import package (renamed in v1.0.0)
+├── filter_chattag/                 # import package (renamed in v0.3.0)
 │   └── filter.py              # Main filter implementation (LangChain)
 ├── scripts/                   # Example pipelines
 ├── prompts/                   # Example prompt files

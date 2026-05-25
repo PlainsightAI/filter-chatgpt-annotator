@@ -49,4 +49,4 @@ export FILTER_CHATTAG_MODEL=bedrock_converse:anthropic.claude-3-5-sonnet-2024102
 
 ## What used to live here
 
-Before v1.0.0 this document described the substantial effort required to add a second provider when the filter was directly coupled to the `openai` SDK. That coupling is gone — the LangChain abstraction is exactly what made this rewrite possible. See [MIGRATION.md](../MIGRATION.md) for the v1.0.0 rebrand details.
+Before v0.3.0 this document described the substantial effort required to add a second provider when the filter was directly coupled to the `openai` SDK. That coupling is gone — the LangChain abstraction is exactly what made this rewrite possible. See [MIGRATION.md](../MIGRATION.md) for the v0.3.0 rebrand details.

@@ -3,7 +3,7 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["filter_chattag"]  # Import package (renamed in v1.0.0)
+packages = ["filter_chattag"]  # Import package (renamed in v0.3.0)
 
 [tool.setuptools.dynamic]
 version = { file = "VERSION" }
