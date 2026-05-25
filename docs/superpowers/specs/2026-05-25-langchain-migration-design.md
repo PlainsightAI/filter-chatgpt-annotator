@@ -17,7 +17,9 @@ This is a **breaking change** (major version bump). No backward-compat shims.
 | Class | `FilterChatgptAnnotator` | `FilterChatTag` |
 | Config class | `FilterChatgptAnnotatorConfig` | `FilterChatTagConfig` |
 | Package | `filter_chatgpt_annotator` | `filter_chattag` |
-| Repo / image | `filter-chatgpt-annotator` | `filter-chattag` |
+| PyPI package | `filter-chatgpt-annotator` | `filter-chattag` |
+| Docker image | `plainsightai/openfilter-chatgpt-annotator` | `plainsightai/openfilter-chattag` |
+| GitHub repo | `PlainsightAI/filter-chatgpt-annotator` | unchanged |
 | Frame metadata key | `chatgpt_annotator` | `chattag` |
 | Model field | `chatgpt_model` | `chattag_model` |
 | API key field | `chatgpt_api_key` | *(removed — use provider native env)* |
@@ -86,4 +88,4 @@ All 4 provider packages installed by default so `FILTER_CHATTAG_MODEL` can switc
 
 ## Repo rename
 
-After PR merges (or in parallel): `gh repo rename filter-chattag` + `git remote set-url origin git@github.com:PlainsightAI/filter-chattag.git`. GitHub keeps a redirect for the old URL automatically.
+Decided against — the GitHub repository keeps its current name `PlainsightAI/filter-chatgpt-annotator`. Only the published artifact names (PyPI package `filter-chattag`, Docker image `plainsightai/openfilter-chattag`) and in-tree identifiers (package, class, metadata key, env vars) change.

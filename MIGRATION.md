@@ -15,10 +15,9 @@ Coupling directly to the `openai` SDK meant adding a second provider required a 
 | `pip install filter-chatgpt-annotator` | `pip install filter-chattag` |
 | `from filter_chatgpt_annotator.filter import FilterChatgptAnnotator, FilterChatgptAnnotatorConfig` | `from filter_chattag.filter import FilterChatTag, FilterChatTagConfig` |
 | `docker pull plainsightai/openfilter-chatgpt-annotator` | `docker pull plainsightai/openfilter-chattag` |
-| `git clone …/filter-chatgpt-annotator.git` | `git clone …/filter-chattag.git` |
 | Frame metadata: `frame.data["meta"]["chatgpt_annotator"]` | `frame.data["meta"]["chattag"]` |
 
-GitHub keeps a redirect for the old `PlainsightAI/filter-chatgpt-annotator` URL automatically, so existing links won't 404, but the canonical name is `filter-chattag`.
+The GitHub repository keeps its existing name (`PlainsightAI/filter-chatgpt-annotator`) — only the published artifact name (PyPI package, Docker image) and the in-tree identifiers (package, class, metadata key) changed.
 
 ## Env var map
 
@@ -94,7 +93,7 @@ The structure inside that dict (`schema_version`, `annotations`, `usage`, `proce
 
 ## Migration checklist
 
-1. Update `pip install` / Docker pull / git clone URLs to `filter-chattag`.
+1. Update `pip install` / Docker pull commands to `filter-chattag` / `plainsightai/openfilter-chattag` (the GitHub repo URL stays the same).
 2. Rename imports: `filter_chatgpt_annotator` → `filter_chattag`, `FilterChatgptAnnotator{,Config}` → `FilterChatTag{,Config}`.
 3. Rename env var `FILTER_CHATGPT_MODEL` → `FILTER_CHATTAG_MODEL` and prefix the value with `openai:` (or another provider).
 4. Drop `FILTER_CHATGPT_API_KEY` — set `OPENAI_API_KEY` (or another provider's env var) instead.

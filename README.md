@@ -2,7 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/filter-chattag.svg?style=flat-square)](https://pypi.org/project/filter-chattag/)
 [![Docker Version](https://img.shields.io/docker/v/plainsightai/openfilter-chattag?sort=semver)](https://hub.docker.com/r/plainsightai/openfilter-chattag)
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/PlainsightAI/filter-chattag/blob/main/LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/PlainsightAI/filter-chatgpt-annotator/blob/main/LICENSE)
 
 > **Powered by [LangChain](https://python.langchain.com/) — works with OpenAI, Google Gemini, Anthropic Claude, and Ollama. Pick the provider by changing one env var.**
 
@@ -193,7 +193,7 @@ Full contract: [docs/output_contract.md](docs/output_contract.md).
 ## Project layout
 
 ```
-filter-chattag/
+filter-chatgpt-annotator/        # repo root (publishes as `filter-chattag` on PyPI)
 ├── filter_chattag/
 │   └── filter.py              # Main filter implementation (LangChain)
 ├── scripts/                   # Example pipelines
