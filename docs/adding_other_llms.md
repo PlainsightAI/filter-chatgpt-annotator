@@ -1,205 +1,52 @@
-# Adding Other LLMs to ChatTag
+# Adding more LLM providers
 
-## Overview
+`FilterChatTag` is built on top of [LangChain](https://python.langchain.com/)'s [`init_chat_model`](https://python.langchain.com/api_reference/langchain/chat_models/langchain.chat_models.base.init_chat_model.html), so adding a new provider does **not** require any code changes in this filter. You install the matching `langchain-<provider>` package and point `FILTER_CHATTAG_MODEL` at it.
 
-The `ChatTag` was specifically designed for the ChatGPT/OpenAI API. Adding support for other LLMs like Gemini (Google) or Nano Banana requires significant modifications to the system architecture.
+## Providers shipped by default
 
-## Implementation Complexity
+The following four are installed by `make install` / `pip install filter-chattag` so they work out of the box:
 
-### 1. **Current Architecture (ChatGPT)**
+| Provider | `FILTER_CHATTAG_MODEL` example | Credential env var |
+| --- | --- | --- |
+| OpenAI | `openai:gpt-4o-mini` | `OPENAI_API_KEY` |
+| Google Gemini | `google_genai:gemini-2.0-flash` | `GOOGLE_API_KEY` |
+| Anthropic Claude | `anthropic:claude-3-5-sonnet-latest` | `ANTHROPIC_API_KEY` |
+| Ollama (local) | `ollama:llava` | `OLLAMA_HOST` (default `http://localhost:11434`) |
 
-The current system is tightly coupled to the OpenAI API:
+## Adding a different provider
 
-```python
-# Current structure
-class FilterChatgptAnnotatorConfig(FilterConfig):
-    chatgpt_model: str = "gpt-4o-mini"
-    chatgpt_api_key: str = ""
-    # ... other ChatGPT-specific parameters
+LangChain supports many more (AWS Bedrock, Azure OpenAI, Mistral, Cohere, Fireworks, Together, Groq, …). For each:
 
-class FilterChatgptAnnotator(Filter):
-    def _analyze_image_with_chatgpt(self, image, frame_id):
-        # OpenAI API specific implementation
-        response = self.client.chat.completions.create(...)
+1. **Install** the LangChain integration:
+   ```bash
+   pip install langchain-<provider>
+   ```
+2. **Find the provider prefix** in [LangChain's provider list](https://python.langchain.com/docs/integrations/chat/).
+3. **Set the env vars** the provider expects (LangChain reads them natively).
+4. **Use it**:
+   ```bash
+   export FILTER_CHATTAG_MODEL=<provider>:<model>
+   make run
+   ```
+
+Example with AWS Bedrock + Anthropic-on-Bedrock:
+
+```bash
+pip install langchain-aws
+export AWS_REGION=us-east-1
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export FILTER_CHATTAG_MODEL=bedrock_converse:anthropic.claude-3-5-sonnet-20241022-v2:0
 ```
 
-### 2. **Challenges for Adding Other LLMs**
+## Vision support is the only hard requirement
 
-#### **A. API Differences**
+`FilterChatTag` always sends multimodal `HumanMessage` content (text + base64-encoded image). Models without vision support will refuse the request. Verify the model you pick supports image input — most "latest" Claude, GPT-4o, Gemini, and `llava`/`llama3.2-vision` Ollama models do.
 
-| Aspect | ChatGPT/OpenAI | Gemini | Nano Banana |
-|--------|----------------|--------|-------------|
-| **Authentication** | Simple API Key | OAuth2 + API Key | API Key + custom headers |
-| **Request Format** | `chat.completions.create()` | `generateContent()` | Custom REST endpoint |
-| **Response Format** | `response.choices[0].message.content` | `response.candidates[0].content` | Custom JSON |
-| **Image Handling** | Base64 inline | Base64 or URLs | Multipart form-data |
-| **Rate Limiting** | Tokens per minute | Requests per minute | Configurable |
-| **Available Models** | gpt-4o, gpt-4o-mini | gemini-pro-vision | nano-banana-vision |
+## Structured output
 
-#### **B. Image Processing Differences**
+`FilterChatTag` calls `model.with_structured_output(Pydantic, include_raw=True)`, which works on the four shipped providers via their native mechanism (tool-calling for OpenAI / Anthropic / Gemini, JSON-mode for Ollama). If you bring a provider whose `with_structured_output` is not yet implemented in `langchain-*`, the filter will raise on first invocation — open an issue and we can add a JSON-parsing fallback.
 
-```python
-# ChatGPT (current)
-image_b64 = base64.b64encode(buffer.getvalue()).decode()
-response = self.client.chat.completions.create(
-    messages=[{
-        "role": "user",
-        "content": [
-            {"type": "text", "text": self.prompt_text},
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
-        ]
-    }]
-)
+## What used to live here
 
-# Gemini (example)
-response = self.client.models.generate_content({
-    "contents": [{
-        "parts": [
-            {"text": self.prompt_text},
-            {"inline_data": {"mime_type": "image/jpeg", "data": image_b64}}
-        ]
-    }]
-})
-
-# Nano Banana (example)
-files = {"image": ("image.jpg", buffer.getvalue(), "image/jpeg")}
-data = {"prompt": self.prompt_text}
-response = requests.post(url, files=files, data=data, headers=headers)
-```
-
-### 3. **Implementation Complexity**
-
-#### **Level 1: Minimal Refactoring (2-3 days)**
-- Create abstract classes for different providers
-- Implement adapters for each LLM
-- Maintain compatibility with existing code
-
-```python
-# Proposed structure
-class LLMProvider(ABC):
-    @abstractmethod
-    def analyze_image(self, image, prompt) -> tuple[dict, dict]:
-        pass
-
-class OpenAIProvider(LLMProvider):
-    def analyze_image(self, image, prompt):
-        # Current ChatGPT implementation
-
-class GeminiProvider(LLMProvider):
-    def analyze_image(self, image, prompt):
-        # Gemini implementation
-
-class FilterLLMAnnotator(Filter):
-    def __init__(self, provider: LLMProvider):
-        self.provider = provider
-```
-
-#### **Level 2: Complete Refactoring (1-2 weeks)**
-- Redesign architecture to be provider-agnostic
-- Implement unified configuration system
-- Add tests for each provider
-- Document differences between providers
-
-### 4. **Provider-Specific Challenges**
-
-#### **Google Gemini**
-```python
-# Gemini-specific complexities:
-- OAuth2 authentication flow
-- Different models for different tasks
-- Rate limiting based on requests, not tokens
-- Different response format
-- Limited support for certain image types
-```
-
-#### **Nano Banana**
-```python
-# Nano Banana-specific complexities:
-- Custom API (not standardized)
-- Specific authentication headers
-- Different image upload format
-- Non-standardized response format
-- Limited documentation
-```
-
-### 5. **Impact on Existing Code**
-
-#### **Files that Would Need Modification:**
-
-1. **`filter_chatgpt_annotator/filter.py`** (Main)
-   - Refactor main class
-   - Add provider system
-   - Modify configuration validation
-
-2. **`filter_chatgpt_annotator/__init__.py`**
-   - Add imports for new providers
-   - Maintain compatibility with current version
-
-3. **Example scripts** (`scripts/`)
-   - Update configurations
-   - Add examples for each provider
-
-4. **Documentation**
-   - Update README
-   - Create provider-specific guides
-
-#### **Proposed Unified Configuration:**
-
-```python
-# Example of unified configuration
-class FilterLLMAnnotatorConfig(FilterConfig):
-    # Provider selection
-    provider: str = "openai"  # "openai", "gemini", "nano_banana"
-    
-    # Provider-specific configs
-    openai_config: Optional[OpenAIConfig] = None
-    gemini_config: Optional[GeminiConfig] = None
-    nano_banana_config: Optional[NanoBananaConfig] = None
-    
-    # Common configs
-    prompt: str = ""
-    output_schema: Dict[str, Any] = {}
-    confidence_threshold: float = 0.9
-```
-
-### 6. **Effort Estimation**
-
-| Task | Estimated Time | Complexity |
-|------|----------------|------------|
-| **Base architecture refactoring** | 3-5 days | High |
-| **Gemini provider implementation** | 2-3 days | Medium |
-| **Nano Banana provider implementation** | 3-4 days | High |
-| **Testing and validation** | 2-3 days | Medium |
-| **Documentation and examples** | 1-2 days | Low |
-| **Migration and compatibility** | 1-2 days | Medium |
-
-**Total: 12-19 days of development**
-
-### 7. **Recommendations**
-
-#### **Incremental Approach:**
-1. **Phase 1:** Refactor to support multiple providers while maintaining compatibility
-2. **Phase 2:** Implement Gemini (better documented)
-3. **Phase 3:** Implement Nano Banana (more complex)
-
-#### **Design Considerations:**
-- Maintain compatibility with existing code
-- Use factory pattern for provider creation
-- Implement fallback between providers
-- Add performance metrics per provider
-
-#### **Alternatives:**
-- **Keep separate:** Create `FilterGeminiAnnotator` and `FilterNanoBananaAnnotator` as independent classes
-- **Plugin system:** Implement plugin system for providers
-- **Unified wrapper:** Create wrapper that abstracts API differences
-
-### 8. **Conclusion**
-
-Adding support for other LLMs is **feasible but complex**, requiring:
-
-- **Significant refactoring** of current architecture
-- **Specific knowledge** of each API
-- **Extensive testing** to ensure compatibility
-- **Detailed documentation** for each provider
-
-The **main complexity** lies in the fundamental differences between APIs, not just implementation details. Each provider has its own conventions, limitations, and characteristics that need to be carefully mapped and abstracted.
+Before v1.0.0 this document described the substantial effort required to add a second provider when the filter was directly coupled to the `openai` SDK. That coupling is gone — the LangChain abstraction is exactly what made this rewrite possible. See [MIGRATION.md](../MIGRATION.md) for the v1.0.0 rebrand details.

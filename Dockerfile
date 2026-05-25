@@ -17,7 +17,7 @@ RUN apt-get update \
       libxext6 \
  && rm -rf /var/lib/apt/lists/*
 
-# Install pip + filter-chatgpt-annotator at version from VERSION file
+# Install pip + filter-chattag at version from VERSION file
 RUN --mount=type=bind,source=VERSION,target=/tmp/VERSION,ro \
     set -eux; \
     RAW="$(head -n1 /tmp/VERSION)"; \
@@ -28,10 +28,10 @@ RUN --mount=type=bind,source=VERSION,target=/tmp/VERSION,ro \
     pip install --no-cache-dir \
       --index-url https://python.openfilter.io/simple \
       --extra-index-url https://pypi.org/simple \
-      "filter-chatgpt-annotator==${PKG_VERSION}"
+      "filter-chattag==${PKG_VERSION}"
 
 # create a writable logs dir and hand over /app to appuser
 RUN mkdir -p /app/logs && chown -R appuser:appuser /app
 
 USER appuser
-CMD ["python", "-m", "filter_chatgpt_annotator.filter"]
+CMD ["python", "-m", "filter_chattag.filter"]

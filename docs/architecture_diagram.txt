@@ -1,163 +1,67 @@
-# Architecture Complexity Diagram
-
-## Current Architecture (ChatGPT Only)
+# Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    FilterChatgptAnnotator                   │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
-│  │   Config        │    │        OpenAI Client            │ │
-│  │ - chatgpt_model │    │ - chat.completions.create()     │ │
-│  │ - api_key       │    │ - Base64 image handling         │ │
-│  │ - prompt        │    │ - Token usage tracking          │ │
-│  └─────────────────┘    └─────────────────────────────────┘ │
-│           │                           │                     │
-│           ▼                           ▼                     │
-│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
-│  │ Image Processing│    │      Response Processing        │ │
-│  │ - BGR to RGB    │    │ - JSON parsing                  │ │
-│  │ - Resize        │    │ - Annotation validation         │ │
-│  │ - Base64 encode │    │ - Bbox validation               │ │
-│  └─────────────────┘    └─────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────────────┐
+│                            FilterChatTag                               │
+│              (OpenFilter — setup / process / shutdown)                 │
+├────────────────────────────────────────────────────────────────────────┤
+│                                                                        │
+│  ┌──────────────────┐      ┌──────────────────────────────────────┐    │
+│  │   Config         │      │       LangChain chat model           │    │
+│  │ - chattag_model  │  →   │   init_chat_model("provider:model")  │    │
+│  │   (provider:..)  │      │   .with_structured_output(           │    │
+│  │ - prompt         │      │     Pydantic, include_raw=True       │    │
+│  │ - output_schema  │      │   )                                  │    │
+│  └──────────────────┘      └──────────────────────────────────────┘    │
+│           │                                  │                         │
+│           ▼                                  ▼                         │
+│  ┌──────────────────┐      ┌──────────────────────────────────────┐    │
+│  │ Image processing │      │      Response handling               │    │
+│  │ - BGR → RGB      │  →   │ - Pydantic-parsed annotations        │    │
+│  │ - Optional resize│      │ - usage_metadata (from raw AIMessage)│    │
+│  │ - Base64 encode  │      │ - Validation + quality checks        │    │
+│  └──────────────────┘      └──────────────────────────────────────┘    │
+│                                            │                           │
+│                                            ▼                           │
+│                          ┌──────────────────────────────────┐          │
+│                          │ frame.data["meta"]["chattag"] =  │          │
+│                          │   {schema_version, annotations,  │          │
+│                          │    usage, model, ...}            │          │
+│                          └──────────────────────────────────┘          │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Proposed Multi-Provider Architecture
+## Why LangChain?
+
+The previous architecture was directly coupled to the OpenAI Python SDK. Adding a second provider would have required a custom abstraction layer, per-provider request/response adapters, and a parallel test matrix. LangChain already does all of that work — `init_chat_model` returns a uniform `BaseChatModel`, multimodal `HumanMessage` content is normalized across providers, and `with_structured_output` picks the best JSON-enforcement mechanism for each (tool-calling for OpenAI / Anthropic / Gemini, JSON-mode for Ollama).
+
+## Provider routing
+
+The string passed to `init_chat_model` selects which `langchain-<provider>` integration to load:
+
+| `chattag_model` prefix | Package      | Credential env var       |
+| ---------------------- | ------------ | ------------------------ |
+| `openai:`              | langchain-openai        | `OPENAI_API_KEY`         |
+| `google_genai:`        | langchain-google-genai  | `GOOGLE_API_KEY`         |
+| `anthropic:`           | langchain-anthropic     | `ANTHROPIC_API_KEY`      |
+| `ollama:`              | langchain-ollama        | `OLLAMA_HOST`            |
+| any other LangChain provider | install separately | per provider          |
+
+## Lifecycle
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                  FilterLLMAnnotator                         │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
-│  │   Unified Config│    │      Provider Factory           │ │
-│  │ - provider      │    │ - OpenAI Provider               │ │
-│  │ - common params │    │ - Gemini Provider               │ │
-│  │ - provider configs│   │ - Nano Banana Provider         │ │
-│  └─────────────────┘    └─────────────────────────────────┘ │
-│           │                           │                     │
-│           ▼                           ▼                     │
-│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
-│  │ Image Processing│    │      Response Processing        │ │
-│  │ - BGR to RGB    │    │ - JSON parsing                  │ │
-│  │ - Resize        │    │ - Annotation validation         │ │
-│  │ - Format adapt  │    │ - Bbox validation               │ │
-│  └─────────────────┘    └─────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+setup()      → validate config → build LangChain chain → load prompt
+process()    → for each frame: BGR→base64 → HumanMessage(text + image_url)
+                              → chain.invoke() → annotations + usage
+                              → attach to frame.data["meta"]["chattag"]
+                              → optionally append to labels.jsonl + save image
+shutdown()   → from labels.jsonl: binary datasets, balanced variant,
+                                  COCO multilabel (if schema has >1 label)
 ```
 
-## Provider-Specific Implementations
+## What is NOT in the architecture
 
-### OpenAI Provider
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    OpenAI Provider                          │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
-│  │   OpenAI Client │    │      Request Format             │ │
-│  │ - API Key auth  │    │ - chat.completions.create()     │ │
-│  │ - Rate limiting │    │ - Base64 inline images          │ │
-│  │ - Token tracking│    │ - Message format                │ │
-│  └─────────────────┘    └─────────────────────────────────┘ │
-│           │                           │                     │
-│           ▼                           ▼                     │
-│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
-│  │  Response Format│    │      Error Handling             │ │
-│  │ - choices[0]    │    │ - API errors                    │ │
-│  │ - usage tokens  │    │ - Rate limit handling           │ │
-│  │ - content       │    │ - Retry logic                   │ │
-│  └─────────────────┘    └─────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Gemini Provider
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Gemini Provider                          │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
-│  │   Gemini Client │    │      Request Format             │ │
-│  │ - OAuth2 auth   │    │ - generateContent()             │ │
-│  │ - API Key auth  │    │ - inline_data format            │ │
-│  │ - Request limits│    │ - Parts structure               │ │
-│  └─────────────────┘    └─────────────────────────────────┘ │
-│           │                           │                     │
-│           ▼                           ▼                     │
-│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
-│  │  Response Format│    │      Error Handling             │ │
-│  │ - candidates[0] │    │ - OAuth errors                  │ │
-│  │ - usage metadata│    │ - Request limit handling        │ │
-│  │ - content       │    │ - Retry logic                   │ │
-│  └─────────────────┘    └─────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Nano Banana Provider
-```
-┌─────────────────────────────────────────────────────────────┐
-│                  Nano Banana Provider                       │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
-│  │   Custom Client │    │      Request Format             │ │
-│  │ - Custom headers│    │ - REST endpoint                 │ │
-│  │ - API Key auth  │    │ - Multipart form-data           │ │
-│  │ - Custom limits │    │ - Custom JSON format            │ │
-│  └─────────────────┘    └─────────────────────────────────┘ │
-│           │                           │                     │
-│           ▼                           ▼                     │
-│  ┌─────────────────┐    ┌─────────────────────────────────┐ │
-│  │  Response Format│    │      Error Handling             │ │
-│  │ - Custom JSON   │    │ - Custom error codes            │ │
-│  │ - Custom usage  │    │ - Custom retry logic            │ │
-│  │ - Custom content│    │ - Custom rate limiting          │ │
-│  └─────────────────┘    └─────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## Complexity Comparison
-
-### Current (Single Provider)
-- **Files to modify:** 1 main file
-- **API knowledge required:** OpenAI only
-- **Testing scope:** Single provider
-- **Maintenance:** Low complexity
-
-### Multi-Provider (Proposed)
-- **Files to modify:** 4+ files
-- **API knowledge required:** 3 different APIs
-- **Testing scope:** 3 providers + integration
-- **Maintenance:** High complexity
-
-## Key Differences Summary
-
-| Aspect | OpenAI | Gemini | Nano Banana |
-|--------|--------|--------|-------------|
-| **Auth** | Simple API Key | OAuth2 + API Key | Custom headers |
-| **Request** | chat.completions | generateContent | Custom REST |
-| **Images** | Base64 inline | Base64 inline | Multipart form |
-| **Response** | choices[0].content | candidates[0].content | Custom JSON |
-| **Rate Limits** | Tokens/min | Requests/min | Custom |
-| **Error Handling** | Standard HTTP | OAuth + HTTP | Custom codes |
-| **Documentation** | Excellent | Good | Limited |
-
-## Implementation Phases
-
-### Phase 1: Architecture Refactoring
-```
-Current → Abstract Provider Interface → Unified Config
-```
-
-### Phase 2: Provider Implementation
-```
-OpenAI Provider → Gemini Provider → Nano Banana Provider
-```
-
-### Phase 3: Integration & Testing
-```
-Unit Tests → Integration Tests → End-to-End Tests
-```
-
-### Phase 4: Documentation & Examples
-```
-API Docs → Usage Examples → Migration Guide
-```
+- No retry layer in this filter (LangChain exposes `.with_retry()` if needed; not wired up by default).
+- No tracing (LangSmith is opt-in via env vars; no code path here).
+- No response cache.
+- No streaming (one-shot per frame; doesn't help here).

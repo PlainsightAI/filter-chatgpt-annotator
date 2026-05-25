@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `ChatTag` is a powerful filter that uses ChatGPT Vision API for image annotation and analysis. It can process video streams or image collections to extract structured classification labels with confidence scores.
+`FilterChatTag` is a LangChain-powered OpenFilter for vision annotation. It sends video frames or images to any LangChain-supported chat model (OpenAI, Google Gemini, Anthropic Claude, Ollama) and extracts structured classification labels with confidence scores.
 
 ## Key Features
 
@@ -47,11 +47,12 @@ make install
 If you don't have access to the private repository, you can install manually:
 
 ```bash
-# Install dependencies
-pip install openai>=1.0.0
-pip install opencv-python>=4.8.0
-pip install python-dotenv>=1.0.0
-pip install pillow>=9.0.0
+# Install LangChain core + provider integrations
+pip install "langchain>=0.3,<0.4" "pydantic>=2,<3"
+pip install langchain-openai langchain-google-genai langchain-anthropic langchain-ollama
+
+# Install OpenFilter-side dependencies
+pip install opencv-python>=4.8.0 python-dotenv>=1.0.0 pillow>=9.0.0
 
 # Install in development mode
 pip install -e .
@@ -71,7 +72,7 @@ Create a `.env` file with the following variables:
 
 ```bash
 # Required
-FILTER_CHATGPT_API_KEY=your_openai_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
 
 # Input source (choose one)
 VIDEO_PATH=/path/to/your/video.mp4
@@ -81,7 +82,7 @@ IMAGE_PATH=/path/to/your/images
 FILTER_PROMPT=./prompts/your_prompt.txt
 
 # Model configuration
-FILTER_CHATGPT_MODEL=gpt-4o-mini
+FILTER_CHATTAG_MODEL=openai:gpt-4o-mini
 FILTER_MAX_TOKENS=1000
 FILTER_TEMPERATURE=0.1
 
@@ -110,8 +111,7 @@ FILTER_DEBUG_METADATA=false
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `chatgpt_model` | string | "gpt-4o" | OpenAI model to use (gpt-4o, gpt-4o-mini) |
-| `chatgpt_api_key` | string | "" | OpenAI API key (required) |
+| `chattag_model` | string | "openai:gpt-4o-mini" | LangChain `provider:model` string (e.g. `openai:gpt-4o-mini`, `google_genai:gemini-2.0-flash`, `anthropic:claude-3-5-sonnet-latest`, `ollama:llava`). Credentials come from the provider's native env var (`OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OLLAMA_HOST`). |
 | `prompt` | string | "" | Path to prompt file (required) |
 | `output_schema` | dict | {} | Expected output format schema |
 
@@ -163,14 +163,14 @@ FILTER_DEBUG_METADATA=false
 ### Basic Usage
 
 ```python
-from filter_chatgpt_annotator.filter import FilterChatgptAnnotator, FilterChatgptAnnotatorConfig
+from filter_chattag.filter import FilterChatTag, FilterChatTagConfig
 
 # Configure the filter
-config = FilterChatgptAnnotatorConfig(
+config = FilterChatTagConfig(
     id="food_annotation",
     sources="tcp://localhost:5550",
     outputs="tcp://*:5552",
-    chatgpt_api_key="your_api_key",
+    chattag_model="openai:gpt-4o-mini",  # plus OPENAI_API_KEY in your env
     prompt="./prompts/food_prompt.txt",
     output_schema={
         "avocado": {"present": False, "confidence": 0.0},
@@ -180,7 +180,7 @@ config = FilterChatgptAnnotatorConfig(
 )
 
 # Run the filter
-FilterChatgptAnnotator.run(config)
+FilterChatTag.run(config)
 ```
 
 ### Using with OpenFilter Pipeline
@@ -189,18 +189,18 @@ FilterChatgptAnnotator.run(config)
 from openfilter.filter_runtime.filter import Filter
 from openfilter.filter_runtime.filters.video_in import VideoIn
 from openfilter.filter_runtime.filters.webvis import Webvis
-from filter_chatgpt_annotator.filter import FilterChatgptAnnotator, FilterChatgptAnnotatorConfig
+from filter_chattag.filter import FilterChatTag, FilterChatTagConfig
 
 Filter.run_multi([
     (VideoIn, dict(
         sources="file:///path/to/video.mp4!resize=960x540!sync!no-loop;main",
         outputs="tcp://*:5550"
     )),
-    (FilterChatgptAnnotator, FilterChatgptAnnotatorConfig(
+    (FilterChatTag, FilterChatTagConfig(
         id="annotation_filter",
         sources="tcp://localhost:5550",
         outputs="tcp://*:5552",
-        chatgpt_api_key="your_api_key",
+        chattag_model="openai:gpt-4o-mini",  # plus OPENAI_API_KEY in your env
         prompt="./prompts/food_prompt.txt",
         output_schema={
             "avocado": {"present": False, "confidence": 0.0},
@@ -222,7 +222,7 @@ Each processed frame includes the following metadata:
 ```json
 {
   "meta": {
-    "chatgpt_annotator": {
+    "chattag": {
       "schema_version": "1.0",
       "annotations": {
         "avocado": {
@@ -241,7 +241,7 @@ Each processed frame includes the following metadata:
       },
       "processing_time": 2.34,
       "timestamp": 1640995200.0,
-      "model": "gpt-4o",
+      "model": "openai:gpt-4o-mini",
       "frame_id": "frame_001"
     }
   }
@@ -319,7 +319,7 @@ Return ONLY valid JSON with "present" and "confidence" (0.0-1.0) for each pet.
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| `chatgpt_api_key is required` | Missing API key | Set `FILTER_CHATGPT_API_KEY` environment variable |
+| `chattag_model is required` | Missing API key | Set `OPENAI_API_KEY` environment variable |
 | `prompt is required` | Missing prompt file | Set `FILTER_PROMPT` environment variable |
 | `Failed to parse JSON response` | Invalid API response | Check prompt format and model capabilities |
 | `API ERROR: Rate limit exceeded` | Too many requests | Implement retry logic or reduce request frequency |
@@ -357,7 +357,7 @@ When `FILTER_DEBUG_METADATA=true`, the filter will create debug files in `output
 
 1. **Image Resizing**: Set `max_image_size` to reduce API costs
 2. **Quality Settings**: Adjust `image_quality` for balance between quality and cost
-3. **Model Selection**: Use `gpt-4o-mini` for lower costs
+3. **Model Selection**: Use a smaller model (`openai:gpt-4o-mini`, `google_genai:gemini-2.0-flash`, `anthropic:claude-3-5-haiku-latest`, or `ollama:llava` for free local) for lower costs
 4. **Token Limits**: Set appropriate `max_tokens` for your use case
 
 ### Speed Optimization
@@ -401,11 +401,11 @@ When `FILTER_DEBUG_METADATA=true`, the filter will create debug files in `output
    - Check image quality and size
    - Validate output schema
 
-2. **API Rate Limits**
-   - Implement exponential backoff
-   - Reduce image size
-   - Use different API keys
-   - Monitor usage patterns
+2. **Provider rate limits**
+   - Switch to a cheaper/faster model (`gpt-4o-mini`, `gemini-2.0-flash`, `claude-3-5-haiku-latest`) or a different provider via `FILTER_CHATTAG_MODEL`
+   - Reduce image size with `FILTER_MAX_IMAGE_SIZE`
+   - Stagger workloads or rotate provider credentials
+   - Monitor usage in the provider's dashboard
 
 3. **Memory Issues**
    - Reduce image size
@@ -426,4 +426,4 @@ For issues and questions:
 2. Review the generated datasets for quality
 3. Test with no-ops mode first
 4. Validate your prompt and schema design
-5. Check OpenAI API status and limits
+5. Check the provider's status page and dashboard for quota/limits

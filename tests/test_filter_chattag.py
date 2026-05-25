@@ -10,198 +10,173 @@ import unittest
 from unittest.mock import Mock, patch
 import numpy as np
 
-from filter_chatgpt_annotator.filter import FilterChatgptAnnotator, FilterChatgptAnnotatorConfig
+from filter_chattag.filter import (
+    FilterChatTag,
+    FilterChatTagConfig,
+    CHATTAG_META_KEY,
+    CHATTAG_OUTPUT_SCHEMA_VERSION,
+)
 from openfilter.filter_runtime.filter import Frame
 
 logger = logging.getLogger(__name__)
 
 logger.setLevel(int(getattr(logging, (os.getenv('LOG_LEVEL') or 'INFO').upper())))
 
-VERBOSE   = '-v' in sys.argv or '--verbose' in sys.argv
+VERBOSE = '-v' in sys.argv or '--verbose' in sys.argv
 LOG_LEVEL = logger.getEffectiveLevel()
 
 
-class TestFilterChatgptAnnotator(unittest.TestCase):
-    
+class TestFilterChatTag(unittest.TestCase):
+
     def setUp(self):
-        """Set up test fixtures before each test method."""
-        # Create a temporary directory for test outputs
         self.temp_dir = tempfile.mkdtemp()
-        
-        # Create a temporary prompt file
+
         self.prompt_file = os.path.join(self.temp_dir, "test_prompt.txt")
         with open(self.prompt_file, 'w') as f:
             f.write("Test prompt for image analysis")
-        
-        # Create test configuration
-        self.config = FilterChatgptAnnotatorConfig(
-            chatgpt_api_key="test-api-key",
+
+        self.config = FilterChatTagConfig(
+            chattag_model="openai:gpt-4o-mini",
             prompt=self.prompt_file,
             output_schema={
                 "item1": {"present": False, "confidence": 0.0},
                 "item2": {"present": False, "confidence": 0.0}
             },
-            save_frames=False,  # Don't save files during tests
-            no_ops=True,  # Use no-ops mode to avoid API calls
+            save_frames=False,
+            no_ops=True,
             forward_main=False
         )
-        
-        # Create a test image (simple RGB array)
+
         self.test_image = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
-        
-        # Create test frame
+
         self.test_frame = Frame(
             image=self.test_image,
             data={"meta": {"id": "test_frame_001"}},
             format="BGR"
         )
-    
+
     def tearDown(self):
-        """Clean up after each test method."""
-        # Clean up temporary directory
         import shutil
         shutil.rmtree(self.temp_dir, ignore_errors=True)
-    
+
     def test_config_validation(self):
-        """Test configuration validation."""
-        # Test missing API key
-        config = FilterChatgptAnnotatorConfig(
-            chatgpt_api_key="",  # Empty API key
+        """Missing model string and missing prompt should raise."""
+        config = FilterChatTagConfig(
+            chattag_model="",
             prompt=self.prompt_file
         )
-        
+
         with self.assertRaises(ValueError) as context:
-            FilterChatgptAnnotator.normalize_config(config)
-        
-        self.assertIn("chatgpt_api_key is required", str(context.exception))
-        
-        # Test missing prompt file
-        config = FilterChatgptAnnotatorConfig(
-            chatgpt_api_key="test-api-key",
+            FilterChatTag.normalize_config(config)
+
+        self.assertIn("chattag_model is required", str(context.exception))
+
+        config = FilterChatTagConfig(
+            chattag_model="openai:gpt-4o-mini",
             prompt="/nonexistent/prompt.txt"
         )
-        
+
         with self.assertRaises(FileNotFoundError) as context:
-            FilterChatgptAnnotator.normalize_config(config)
-        
+            FilterChatTag.normalize_config(config)
+
         self.assertIn("Prompt file not found", str(context.exception))
-    
+
     def test_no_ops_mode(self):
-        """Test no-ops mode functionality."""
-        # Create and setup filter
-        filter_instance = FilterChatgptAnnotator(self.config)
+        filter_instance = FilterChatTag(self.config)
         filter_instance.setup(self.config)
-        
-        # Process frame
+
         frames = {"test_frame": self.test_frame}
         result = filter_instance.process(frames)
-        
-        # Verify result structure
+
         self.assertIn("test_frame", result)
         result_frame = result["test_frame"]
-        
-        # Verify metadata was added
-        self.assertIn("meta", result_frame.data)
-        self.assertIn("chatgpt_annotator", result_frame.data["meta"])
-        
-        meta_ann = result_frame.data["meta"]["chatgpt_annotator"]
-        self.assertEqual(meta_ann["schema_version"], "1.0")
 
-        # Verify result uses default annotations
+        self.assertIn("meta", result_frame.data)
+        self.assertIn(CHATTAG_META_KEY, result_frame.data["meta"])
+
+        meta_ann = result_frame.data["meta"][CHATTAG_META_KEY]
+        self.assertEqual(meta_ann["schema_version"], CHATTAG_OUTPUT_SCHEMA_VERSION)
+
         annotations = meta_ann["annotations"]
         self.assertEqual(annotations["item1"]["present"], False)
         self.assertEqual(annotations["item1"]["confidence"], 0.0)
         self.assertEqual(annotations["item2"]["present"], False)
         self.assertEqual(annotations["item2"]["confidence"], 0.0)
-        
-        # Verify usage shows zero tokens
-        usage = result_frame.data["meta"]["chatgpt_annotator"]["usage"]
+
+        usage = meta_ann["usage"]
         self.assertEqual(usage["total_tokens"], 0)
-    
+
     def test_forward_main_functionality(self):
-        """Test forward_main functionality."""
-        # Create config with forward_main=True
-        config = FilterChatgptAnnotatorConfig(
-            chatgpt_api_key="test-api-key",
+        config = FilterChatTagConfig(
+            chattag_model="openai:gpt-4o-mini",
             prompt=self.prompt_file,
             output_schema={"item1": {"present": False, "confidence": 0.0}},
             save_frames=False,
             no_ops=True,
             forward_main=True
         )
-        
-        # Create and setup filter
-        filter_instance = FilterChatgptAnnotator(config)
+
+        filter_instance = FilterChatTag(config)
         filter_instance.setup(config)
-        
-        # Create frames with main topic
+
         main_frame = Frame(
             image=self.test_image,
             data={"meta": {"id": "main_frame"}},
             format="BGR"
         )
-        
+
         frames = {
             "main": main_frame,
             "other_topic": self.test_frame
         }
-        
-        # Process frames
+
         result = filter_instance.process(frames)
-        
-        # Verify main topic is preserved and comes first
+
         result_keys = list(result.keys())
         self.assertEqual(result_keys[0], "main")
-        
-        # Verify main frame data is preserved
+
         main_result = result["main"]
         self.assertEqual(main_result.data["meta"]["id"], "main_frame")
-        
-        # Verify other topic was processed
+
         self.assertIn("other_topic", result)
         other_result = result["other_topic"]
-        self.assertIn("chatgpt_annotator", other_result.data["meta"])
-    
+        self.assertIn(CHATTAG_META_KEY, other_result.data["meta"])
+
     def test_validate_annotations(self):
-        """Test annotation validation logic."""
-        # Create filter instance with minimal config
-        config = FilterChatgptAnnotatorConfig(
-            chatgpt_api_key="test-key",
+        config = FilterChatTagConfig(
+            chattag_model="openai:gpt-4o-mini",
             prompt=self.prompt_file
         )
-        filter_instance = FilterChatgptAnnotator(config)
+        filter_instance = FilterChatTag(config)
         filter_instance.output_schema = {
             "item1": {"present": False, "confidence": 0.0},
             "item2": {"present": False, "confidence": 0.0}
         }
 
-        # Test with valid annotations
         valid_annotations = {
             "item1": {"present": True, "confidence": 0.9},
             "item2": {"present": False, "confidence": 0.1}
         }
-        
+
         result = filter_instance._validate_annotations(valid_annotations)
         self.assertEqual(result["item1"]["present"], True)
         self.assertEqual(result["item1"]["confidence"], 0.9)
         self.assertEqual(result["item2"]["present"], False)
         self.assertEqual(result["item2"]["confidence"], 0.1)
-        
-        # Test with boolean annotations (should be converted)
+
         boolean_annotations = {
             "item1": True,
             "item2": False
         }
-        
+
         result = filter_instance._validate_annotations(boolean_annotations)
         self.assertEqual(result["item1"]["present"], True)
         self.assertEqual(result["item1"]["confidence"], 1.0)
         self.assertEqual(result["item2"]["present"], False)
         self.assertEqual(result["item2"]["confidence"], 0.0)
-    
+
     def test_default_for_schema_key(self):
-        """_default_for_schema_key: non-dict defaults and legacy dicts with extra keys."""
-        d = FilterChatgptAnnotator._default_for_schema_key
+        d = FilterChatTag._default_for_schema_key
 
         self.assertEqual(d(None), {"present": False, "confidence": 0.0})
         self.assertEqual(d(0), {"present": False, "confidence": 0.0})
@@ -221,53 +196,46 @@ class TestFilterChatgptAnnotator(unittest.TestCase):
         self.assertEqual(set(out.keys()), {"present", "confidence"})
 
     def test_get_default_annotations(self):
-        """Test default annotations generation."""
-        config = FilterChatgptAnnotatorConfig(
-            chatgpt_api_key="test-key",
+        config = FilterChatTagConfig(
+            chattag_model="openai:gpt-4o-mini",
             prompt=self.prompt_file
         )
-        filter_instance = FilterChatgptAnnotator(config)
+        filter_instance = FilterChatTag(config)
         filter_instance.output_schema = {
             "item1": {"present": False, "confidence": 0.0},
             "item2": {"present": False, "confidence": 0.0}
         }
-        
+
         defaults = filter_instance._get_default_annotations()
         self.assertEqual(defaults["item1"]["present"], False)
         self.assertEqual(defaults["item1"]["confidence"], 0.0)
         self.assertEqual(defaults["item2"]["present"], False)
         self.assertEqual(defaults["item2"]["confidence"], 0.0)
 
-        # Legacy output_schema with bbox: defaults are classification-only
         filter_instance.output_schema = {
             "avocado": {"present": False, "confidence": 0.0, "bbox": None},
         }
         defaults = filter_instance._get_default_annotations()
         self.assertEqual(defaults["avocado"], {"present": False, "confidence": 0.0})
         self.assertNotIn("bbox", defaults["avocado"])
-        
-        # Test without schema
+
         filter_instance.output_schema = None
         defaults = filter_instance._get_default_annotations()
         self.assertEqual(defaults, {})
-    
+
     def test_topic_filtering(self):
-        """Test topic filtering functionality."""
-        # Create config with topic pattern
-        config = FilterChatgptAnnotatorConfig(
-            chatgpt_api_key="test-api-key",
+        config = FilterChatTagConfig(
+            chattag_model="openai:gpt-4o-mini",
             prompt=self.prompt_file,
             output_schema={"item1": {"present": False, "confidence": 0.0}},
             save_frames=False,
             no_ops=True,
-            topic_pattern="test_.*"  # Only process topics starting with "test_"
+            topic_pattern="test_.*"
         )
-        
-        # Create and setup filter
-        filter_instance = FilterChatgptAnnotator(config)
+
+        filter_instance = FilterChatTag(config)
         filter_instance.setup(config)
-        
-        # Create frames with different topic names
+
         frames = {
             "test_frame": self.test_frame,
             "other_frame": Frame(
@@ -276,35 +244,28 @@ class TestFilterChatgptAnnotator(unittest.TestCase):
                 format="BGR"
             )
         }
-        
-        # Process frames
+
         result = filter_instance.process(frames)
-        
-        # Verify only test_frame was processed
+
         self.assertIn("test_frame", result)
         self.assertNotIn("other_frame", result)
-        
-        # Verify test_frame was processed
+
         test_result = result["test_frame"]
-        self.assertIn("chatgpt_annotator", test_result.data["meta"])
-    
+        self.assertIn(CHATTAG_META_KEY, test_result.data["meta"])
+
     def test_exclude_topics(self):
-        """Test exclude topics functionality."""
-        # Create config with exclude topics
-        config = FilterChatgptAnnotatorConfig(
-            chatgpt_api_key="test-api-key",
+        config = FilterChatTagConfig(
+            chattag_model="openai:gpt-4o-mini",
             prompt=self.prompt_file,
             output_schema={"item1": {"present": False, "confidence": 0.0}},
             save_frames=False,
             no_ops=True,
             exclude_topics=["excluded_frame"]
         )
-        
-        # Create and setup filter
-        filter_instance = FilterChatgptAnnotator(config)
+
+        filter_instance = FilterChatTag(config)
         filter_instance.setup(config)
-        
-        # Create frames with different topic names
+
         frames = {
             "test_frame": self.test_frame,
             "excluded_frame": Frame(
@@ -313,45 +274,101 @@ class TestFilterChatgptAnnotator(unittest.TestCase):
                 format="BGR"
             )
         }
-        
-        # Process frames
+
         result = filter_instance.process(frames)
-        
-        # Verify excluded_frame was not processed
+
         self.assertIn("test_frame", result)
         self.assertNotIn("excluded_frame", result)
-        
-        # Verify test_frame was processed
+
         test_result = result["test_frame"]
-        self.assertIn("chatgpt_annotator", test_result.data["meta"])
-    
+        self.assertIn(CHATTAG_META_KEY, test_result.data["meta"])
+
     def test_environment_variables(self):
-        """Test environment variable configuration."""
-        # Set environment variables
-        os.environ["FILTER_CHATGPT_API_KEY"] = "env-api-key"
+        os.environ["FILTER_CHATTAG_MODEL"] = "anthropic:claude-3-5-sonnet-latest"
         os.environ["FILTER_FORWARD_MAIN"] = "true"
         os.environ["FILTER_NO_OPS"] = "true"
-        
+
         try:
-            # Create config without explicit values
-            config = FilterChatgptAnnotatorConfig(
+            config = FilterChatTagConfig(
                 prompt=self.prompt_file,
                 output_schema={"item1": {"present": False, "confidence": 0.0}}
             )
-            
-            # Normalize config (this should pick up env vars)
-            normalized_config = FilterChatgptAnnotator.normalize_config(config)
-            
-            # Verify environment variables were applied
-            self.assertEqual(normalized_config.chatgpt_api_key, "env-api-key")
+
+            normalized_config = FilterChatTag.normalize_config(config)
+
+            self.assertEqual(normalized_config.chattag_model, "anthropic:claude-3-5-sonnet-latest")
             self.assertEqual(normalized_config.forward_main, True)
             self.assertEqual(normalized_config.no_ops, True)
-            
+
         finally:
-            # Clean up environment variables
-            for key in ["FILTER_CHATGPT_API_KEY", "FILTER_FORWARD_MAIN", "FILTER_NO_OPS"]:
+            for key in ["FILTER_CHATTAG_MODEL", "FILTER_FORWARD_MAIN", "FILTER_NO_OPS"]:
                 if key in os.environ:
                     del os.environ[key]
+
+    def test_build_schema_returns_pydantic_model(self):
+        """_build_schema generates a Pydantic model with a field per label."""
+        schema = FilterChatTag._build_schema({
+            "cat": {"present": False, "confidence": 0.0},
+            "dog": {"present": False, "confidence": 0.0},
+        })
+
+        self.assertIsNotNone(schema)
+        instance = schema(
+            cat={"present": True, "confidence": 0.9},
+            dog={"present": False, "confidence": 0.1},
+        )
+        dumped = instance.model_dump()
+        self.assertEqual(dumped["cat"]["present"], True)
+        self.assertEqual(dumped["cat"]["confidence"], 0.9)
+        self.assertEqual(dumped["dog"]["present"], False)
+
+    def test_build_schema_rejects_confidence_out_of_range(self):
+        """The generated schema enforces 0 ≤ confidence ≤ 1."""
+        from pydantic import ValidationError
+
+        schema = FilterChatTag._build_schema({
+            "cat": {"present": False, "confidence": 0.0},
+        })
+
+        with self.assertRaises(ValidationError):
+            schema(cat={"present": True, "confidence": 1.5})
+
+    def test_build_schema_empty_returns_none(self):
+        self.assertIsNone(FilterChatTag._build_schema({}))
+        self.assertIsNone(FilterChatTag._build_schema(None))
+
+    def test_build_model_dispatch_per_provider(self):
+        """_build_model passes the model string through to LangChain's init_chat_model
+        and wraps it with structured output when a schema is provided."""
+        from filter_chattag import filter as filter_mod
+
+        wrapped_runnable = Mock(name="WrappedRunnable")
+        chat_model = Mock(name="ChatModel")
+        chat_model.with_structured_output.return_value = wrapped_runnable
+
+        with patch.object(filter_mod, "init_chat_model", create=True, return_value=chat_model) as mock_init:
+            # Patch where init_chat_model is imported inside _build_model
+            with patch("langchain.chat_models.init_chat_model", return_value=chat_model) as mock_init2:
+                schema = FilterChatTag._build_schema({"x": {"present": False, "confidence": 0.0}})
+                config = FilterChatTagConfig(
+                    chattag_model="google_genai:gemini-2.0-flash",
+                    prompt=self.prompt_file,
+                    max_tokens=500,
+                    temperature=0.2,
+                )
+
+                runnable = FilterChatTag._build_model(config, schema)
+
+                mock_init2.assert_called_once_with(
+                    "google_genai:gemini-2.0-flash",
+                    max_tokens=500,
+                    temperature=0.2,
+                )
+                chat_model.with_structured_output.assert_called_once()
+                # include_raw=True is required so we can read usage_metadata off the raw AIMessage
+                _, kwargs = chat_model.with_structured_output.call_args
+                self.assertTrue(kwargs.get("include_raw"))
+                self.assertIs(runnable, wrapped_runnable)
 
 
 try:

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:filter-chatgpt-annotator:chattag_output:1.0",
+  "$id": "urn:filter-chattag:chattag_output:1.0",
   "title": "ChatTag OpenFilter output",
   "oneOf": [
     { "$ref": "#/$defs/streamPayload" },

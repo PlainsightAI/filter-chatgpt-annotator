@@ -3,13 +3,13 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["filter_chatgpt_annotator"]  # Specify the package directory
+packages = ["filter_chattag"]  # Specify the package directory
 
 [tool.setuptools.dynamic]
 version = { file = "VERSION" }
 
 [project]
-name = "filter_chatgpt_annotator"
+name = "filter_chattag"
 readme = "README.md"
 requires-python = ">=3.10, <3.14"
 license = "Apache-2.0"
@@ -26,8 +26,13 @@ dynamic = ["version"]
 dependencies = [
   "opencv-python>=4.8.0",
   "python-dotenv>=1.0.0",
-  "openai>=1.0.0",
   "pillow>=9.0.0",
+  "pydantic>=2.0,<3.0",
+  "langchain>=0.3,<0.4",
+  "langchain-openai>=0.2,<0.3",
+  "langchain-google-genai>=2.0,<3.0",
+  "langchain-anthropic>=0.3,<0.4",
+  "langchain-ollama>=0.2,<0.3",
   "openfilter[all]>=1.1.0,<2.0.0"
 ]
 
