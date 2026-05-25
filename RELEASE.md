@@ -8,15 +8,18 @@
 - Migration guide ([`MIGRATION.md`](MIGRATION.md)) covering imports, env vars, metadata keys, and the architectural shift.
 
 ### Changed (breaking)
-- Renamed package, class, repo, and image:
-  - `filter_chatgpt_annotator` → `filter_chattag`
+- Renamed import package, class, and Docker image:
+  - `filter_chatgpt_annotator` → `filter_chattag` (Python import path)
   - `FilterChatgptAnnotator` / `FilterChatgptAnnotatorConfig` → `FilterChatTag` / `FilterChatTagConfig`
-  - `filter-chatgpt-annotator` → `filter-chattag` (PyPI + GitHub)
   - `plainsightai/openfilter-chatgpt-annotator` → `plainsightai/openfilter-chattag` (Docker Hub)
 - Renamed frame metadata key `meta.chatgpt_annotator` → `meta.chattag`. The dict shape inside is unchanged; `labels.jsonl` is unchanged.
 - Replaced env var `FILTER_CHATGPT_MODEL=gpt-4o-mini` with `FILTER_CHATTAG_MODEL=openai:gpt-4o-mini` (LangChain `provider:model` string).
 - Removed env var `FILTER_CHATGPT_API_KEY` — set the provider's native env var (`OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OLLAMA_HOST`).
 - Replaced `openai>=1.0.0` dependency with `langchain` + `langchain-openai` + `langchain-google-genai` + `langchain-anthropic` + `langchain-ollama` + `pydantic`.
+
+### Unchanged
+- PyPI distribution name remains `filter-chatgpt-annotator` (`pip install filter-chatgpt-annotator==1.0.0`).
+- GitHub repository URL.
 
 ## v0.2.3 - 2026-04-23
 

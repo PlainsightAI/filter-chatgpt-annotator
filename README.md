@@ -1,6 +1,6 @@
 # FilterChatTag
 
-[![PyPI version](https://img.shields.io/pypi/v/filter-chattag.svg?style=flat-square)](https://pypi.org/project/filter-chattag/)
+[![PyPI version](https://img.shields.io/pypi/v/filter-chatgpt-annotator.svg?style=flat-square)](https://pypi.org/project/filter-chatgpt-annotator/)
 [![Docker Version](https://img.shields.io/docker/v/plainsightai/openfilter-chattag?sort=semver)](https://hub.docker.com/r/plainsightai/openfilter-chattag)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/PlainsightAI/filter-chatgpt-annotator/blob/main/LICENSE)
 
@@ -193,8 +193,8 @@ Full contract: [docs/output_contract.md](docs/output_contract.md).
 ## Project layout
 
 ```
-filter-chatgpt-annotator/        # repo root (publishes as `filter-chattag` on PyPI)
-├── filter_chattag/
+filter-chatgpt-annotator/        # repo root, also the PyPI distribution name
+├── filter_chattag/                 # import package (renamed in v1.0.0)
 │   └── filter.py              # Main filter implementation (LangChain)
 ├── scripts/                   # Example pipelines
 ├── prompts/                   # Example prompt files

@@ -17,7 +17,7 @@ This is a **breaking change** (major version bump). No backward-compat shims.
 | Class | `FilterChatgptAnnotator` | `FilterChatTag` |
 | Config class | `FilterChatgptAnnotatorConfig` | `FilterChatTagConfig` |
 | Package | `filter_chatgpt_annotator` | `filter_chattag` |
-| PyPI package | `filter-chatgpt-annotator` | `filter-chattag` |
+| PyPI distribution | `filter-chatgpt-annotator` | unchanged (avoids release-workflow chicken-and-egg) |
 | Docker image | `plainsightai/openfilter-chatgpt-annotator` | `plainsightai/openfilter-chattag` |
 | GitHub repo | `PlainsightAI/filter-chatgpt-annotator` | unchanged |
 | Frame metadata key | `chatgpt_annotator` | `chattag` |
@@ -88,4 +88,4 @@ All 4 provider packages installed by default so `FILTER_CHATTAG_MODEL` can switc
 
 ## Repo rename
 
-Decided against — the GitHub repository keeps its current name `PlainsightAI/filter-chatgpt-annotator`. Only the published artifact names (PyPI package `filter-chattag`, Docker image `plainsightai/openfilter-chattag`) and in-tree identifiers (package, class, metadata key, env vars) change.
+Decided against — the GitHub repository and the PyPI distribution name both keep their current value (`filter-chatgpt-annotator`). The shared release workflow uses a dry-run that `pip install`s the package at the base version: renaming the PyPI distribution breaks that path because the new name has nothing published yet. Only the Docker image (`plainsightai/openfilter-chattag`) and in-tree identifiers (import package, class, metadata key, env vars) change.

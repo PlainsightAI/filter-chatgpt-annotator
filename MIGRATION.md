@@ -1,6 +1,8 @@
-# Migrating from `filter-chatgpt-annotator` → `filter-chattag` (v1.0.0)
+# v1.0.0 migration: LangChain backend, `FilterChatTag`
 
-`filter-chatgpt-annotator` was renamed to `filter-chattag` in v1.0.0 and its OpenAI-only backend was replaced with [LangChain](https://python.langchain.com/) so the same filter now works with OpenAI, Google Gemini, Anthropic Claude, Ollama, and any other LangChain-compatible vision model.
+In v1.0.0 the filter's OpenAI-only backend was replaced with [LangChain](https://python.langchain.com/) so the same code now works with OpenAI, Google Gemini, Anthropic Claude, Ollama, and any other LangChain-compatible vision model. The Python class, import path, frame metadata key, env vars, and Docker image were rebranded as `ChatTag` (aligning with the existing `ChatTag` JSONL schema).
+
+The **PyPI distribution name** (`filter-chatgpt-annotator`) and **GitHub repo URL** are unchanged in this release, so `pip install filter-chatgpt-annotator==1.0.0` keeps working. Only the import path changes (install one name, import another — same pattern as `pillow → PIL`, `beautifulsoup4 → bs4`).
 
 This is a breaking change with no backward-compat shims. The mappings below cover everything you need to update.
 
@@ -12,12 +14,12 @@ Coupling directly to the `openai` SDK meant adding a second provider required a 
 
 | Old | New |
 | --- | --- |
-| `pip install filter-chatgpt-annotator` | `pip install filter-chattag` |
+| `pip install filter-chatgpt-annotator` | unchanged — still `pip install filter-chatgpt-annotator` |
 | `from filter_chatgpt_annotator.filter import FilterChatgptAnnotator, FilterChatgptAnnotatorConfig` | `from filter_chattag.filter import FilterChatTag, FilterChatTagConfig` |
 | `docker pull plainsightai/openfilter-chatgpt-annotator` | `docker pull plainsightai/openfilter-chattag` |
 | Frame metadata: `frame.data["meta"]["chatgpt_annotator"]` | `frame.data["meta"]["chattag"]` |
 
-The GitHub repository keeps its existing name (`PlainsightAI/filter-chatgpt-annotator`) — only the published artifact name (PyPI package, Docker image) and the in-tree identifiers (package, class, metadata key) changed.
+The GitHub repo URL and the PyPI distribution name both stay the same in v1.0.0. Only the import path, class, frame metadata key, env vars, and Docker image were rebranded.
 
 ## Env var map
 
@@ -93,7 +95,7 @@ The structure inside that dict (`schema_version`, `annotations`, `usage`, `proce
 
 ## Migration checklist
 
-1. Update `pip install` / Docker pull commands to `filter-chattag` / `plainsightai/openfilter-chattag` (the GitHub repo URL stays the same).
+1. Bump version: `pip install --upgrade filter-chatgpt-annotator==1.0.0` (install name unchanged). Switch Docker pulls to `plainsightai/openfilter-chattag`.
 2. Rename imports: `filter_chatgpt_annotator` → `filter_chattag`, `FilterChatgptAnnotator{,Config}` → `FilterChatTag{,Config}`.
 3. Rename env var `FILTER_CHATGPT_MODEL` → `FILTER_CHATTAG_MODEL` and prefix the value with `openai:` (or another provider).
 4. Drop `FILTER_CHATGPT_API_KEY` — set `OPENAI_API_KEY` (or another provider's env var) instead.

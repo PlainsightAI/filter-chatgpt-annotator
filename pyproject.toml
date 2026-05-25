@@ -3,13 +3,18 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["filter_chattag"]  # Specify the package directory
+packages = ["filter_chattag"]  # Import package (renamed in v1.0.0)
 
 [tool.setuptools.dynamic]
 version = { file = "VERSION" }
 
 [project]
-name = "filter_chattag"
+# PyPI distribution name kept as filter_chatgpt_annotator so existing
+# `pip install filter-chatgpt-annotator` keeps working and the release
+# workflow's dry-run can resolve previously published versions.
+# The IMPORT path is the new filter_chattag (see [tool.setuptools]
+# above): `from filter_chattag.filter import FilterChatTag`.
+name = "filter_chatgpt_annotator"
 readme = "README.md"
 requires-python = ">=3.10, <3.14"
 license = "Apache-2.0"
