@@ -1,33 +1,34 @@
 services:
   video_in:
-    image: containers.openfilter.io/plainsightai/openfilter-video-inopenfilter-chatgpt-annotator:0.2.2
+    image: containers.openfilter.io/plainsightai/openfilter-video-in:latest
     environment:
-      LOG_LEVEL: ${LOG_LEVELopenfilter-chatgpt-annotator:0.2.2}
+      LOG_LEVEL: ${LOG_LEVEL}
       FILTER_ID: VideoIn
       FILTER_SOURCES: file:///video.mp4!sync!loop
       FILTER_OUTPUTS: tcp://*
     volumes:
-      - ./data/sample-video.mp4:/video.mp4openfilter-chatgpt-annotator:0.2.2
+      - ./data/sample-video.mp4:/video.mp4
 
-  chatgpt_annotator_filter:
-    image: containers.openfilter.io/plainsightai/openfilter-chatgpt-annotator:0.2.2
+  chattag_filter:
+    image: containers.openfilter.io/plainsightai/openfilter-chattag:latest
     environment:
-      LOG_LEVEL: ${LOG_LEVELopenfilter-chatgpt-annotator:0.2.2}
-      FILTER_ID: ChatgptAnnotatorFilter
+      LOG_LEVEL: ${LOG_LEVEL}
+      FILTER_ID: ChatTagFilter
       FILTER_SOURCES: tcp://video_in
       FILTER_OUTPUTS: tcp://*
       FILTER_MQ_LOG: pretty
-      FILTER_CHATGPT_API_KEY: 'sk-open-ai-key'
+      FILTER_CHATTAG_MODEL: 'openai:gpt-4o-mini'
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
       FILTER_PROMPT: '/simple_salad_prompt.txt'
-      FILTER_OUTPUT_SCHEMA: '{"avocado":{"present"openfilter-chatgpt-annotator:0.2.2,"confidence"openfilter-chatgpt-annotator:0.2.2},"lettuce":{"present"openfilter-chatgpt-annotator:0.2.2,"confidence"openfilter-chatgpt-annotator:0.2.2},"tomato":{"present"openfilter-chatgpt-annotator:0.2.2,"confidence"openfilter-chatgpt-annotator:0.2.2}}'
+      FILTER_OUTPUT_SCHEMA: '{"avocado":{"present":false,"confidence":0.0},"lettuce":{"present":false,"confidence":0.0},"tomato":{"present":false,"confidence":0.0}}'
     volumes:
-      - ./prompts/simple_salad_prompt.txt:/simple_salad_prompt.txtopenfilter-chatgpt-annotator:0.2.2
+      - ./prompts/simple_salad_prompt.txt:/simple_salad_prompt.txt
 
   webvis:
-    image: containers.openfilter.io/plainsightai/openfilter-webvisopenfilter-chatgpt-annotator:0.2.2
+    image: containers.openfilter.io/plainsightai/openfilter-webvis:latest
     environment:
-      LOG_LEVEL: ${LOG_LEVELopenfilter-chatgpt-annotator:0.2.2}
+      LOG_LEVEL: ${LOG_LEVEL}
       FILTER_ID: Webvis
-      FILTER_SOURCES: tcp://chatgpt_annotator_filter
+      FILTER_SOURCES: tcp://chattag_filter
     ports:
-      - 8001openfilter-chatgpt-annotator:0.2.2
+      - 8001:8000

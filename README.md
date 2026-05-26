@@ -1,575 +1,242 @@
-# ChatTag
+# FilterChatTag
 
 [![PyPI version](https://img.shields.io/pypi/v/filter-chatgpt-annotator.svg?style=flat-square)](https://pypi.org/project/filter-chatgpt-annotator/)
-[![Docker Version](https://img.shields.io/docker/v/plainsightai/openfilter-chatgpt-annotator?sort=semver)](https://hub.docker.com/r/plainsightai/openfilter-chatgpt-annotator)
+[![Docker Version](https://img.shields.io/docker/v/plainsightai/openfilter-chattag?sort=semver)](https://hub.docker.com/r/plainsightai/openfilter-chattag)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/PlainsightAI/filter-chatgpt-annotator/blob/main/LICENSE)
 
-A generic filter that uses ChatGPT Vision API for image annotation and analysis across diverse datasets and domains.
+> **Powered by [LangChain](https://python.langchain.com/) — works with OpenAI, Google Gemini, Anthropic Claude, and Ollama. Pick the provider by changing one env var.**
+
+`FilterChatTag` is an OpenFilter that sends each video/image frame to a multimodal chat model and attaches structured annotations (`{present, confidence}` per label) to the frame metadata. Built on top of LangChain's `init_chat_model`, so any LangChain-supported chat model with vision can be plugged in.
+
+> **Breaking change in v0.3.0** — this filter was previously published as `filter-chatgpt-annotator` / `FilterChatgptAnnotator`. See [MIGRATION.md](MIGRATION.md) for the rename map.
 
 ## Features
 
-- **Multi-domain Support**: Supports any domain requiring image classification and annotation (food, pets, medical, industrial, etc.)
-- **Configurable Prompts**: Customizable prompts for different annotation tasks
-- **Standardized Output**: Versioned JSON contract for frames and `labels.jsonl` ([docs/output_contract.md](docs/output_contract.md))
-- **Image Optimization**: Automatic image resizing to reduce API costs
-- **Fault Tolerant**: Logs and skips malformed data instead of crashing
-- **Real-time Processing**: Processes video streams in real-time
-- **Web Visualization**: Includes web interface for viewing results
-- **Pipeline Integration**: Works with OpenFilter pipeline architecture
-- **Environment Configuration**: Full configuration through environment variables
-- **Frame Persistence**: Optional saving of JSON results per frame
-- **Topic Filtering**: Process specific topics or exclude unwanted ones
-- **Topic Forwarding**: Preserve main topic alongside processed results for pipeline compatibility
-- **Cost Optimization**: Configurable image size and quality settings
+- **Multi-provider** — OpenAI, Gemini, Claude, Ollama via LangChain. Same code, change `FILTER_CHATTAG_MODEL`.
+- **Structured output enforcement** — annotations are validated by a Pydantic schema generated from `FILTER_OUTPUT_SCHEMA`; LangChain picks the best mechanism per provider (tool-calling, JSON-mode).
+- **Standardized output contract** — versioned JSON payload on the frame (`meta.chattag`) and per-line in `labels.jsonl`. See [docs/output_contract.md](docs/output_contract.md).
+- **Image optimization** — optional resize/quality settings to control cost.
+- **Dataset generators on shutdown** — binary classification datasets (balanced + unbalanced) and COCO multilabel export when `output_schema` has more than one label.
+- **Topic filtering / forwarding**, **no-ops mode**, **frame persistence** — pipeline-friendly.
 
-## Architecture
-
-The filter follows the OpenFilter pattern with three main stages:
-
-### Stage Responsibilities
-
-| Stage | Responsibility |
-|-------|----------------|
-| `setup()` | Parse and validate configuration; initialize ChatGPT client; load prompt file |
-| `process()` | Core operation: send images to ChatGPT Vision API, parse, validate, attach result |
-| `shutdown()` | Clean up resources (close connections) when filter stops |
-
-### Data Signature
-
-The filter returns processed frames with the following data structure:
-
-**Main Frame Data:**
-- Original frame data preserved
-- Processing results under `meta.chatgpt_annotator` (see [docs/output_contract.md](docs/output_contract.md)):
-  - `schema_version`: Contract version string (e.g. `"1.0"`)
-  - `annotations`: Dict with item_name -> {"present": bool, "confidence": float}
-  - `usage`: Dict with token usage information
-  - `processing_time`, `timestamp`, `model`, `frame_id`
-  - `error`: Present when processing failed
-
-**Topic Forwarding:**
-The `forward_main` parameter controls whether the main topic from input frames is forwarded to the output:
-
-- **`forward_main=True`**: The main topic from input frames is preserved and forwarded to the output alongside processed results
-- **`forward_main=False`**: Only processed frames are returned (no main topic forwarding)
-
-This is useful in pipeline scenarios where you want to preserve the original main frame alongside processed results for downstream filters.
-
-## Installation
+## Quick start
 
 ```bash
-# Install with development dependencies
 make install
+cp env.example .env
+# Edit .env: pick a provider + set the credential
+make run
 ```
+
+### Pick a provider
+
+Set `FILTER_CHATTAG_MODEL` to a LangChain `provider:model` string. All four providers are installed by default — no extra install step.
+
+| Provider | `FILTER_CHATTAG_MODEL` example | Credential env var |
+| --- | --- | --- |
+| OpenAI | `openai:gpt-4o-mini` | `OPENAI_API_KEY` |
+| Google Gemini | `google_genai:gemini-2.0-flash` | `GOOGLE_API_KEY` |
+| Anthropic Claude | `anthropic:claude-3-5-sonnet-latest` | `ANTHROPIC_API_KEY` |
+| Ollama (local) | `ollama:llava` | `OLLAMA_HOST` |
+
+Any other LangChain-supported chat model with vision works too — just install the matching `langchain-*` package and use its provider prefix.
 
 ## Configuration
 
-1. Copy the example environment file:
 ```bash
-cp env.example .env
-```
+# Required
+FILTER_CHATTAG_MODEL=openai:gpt-4o-mini
+OPENAI_API_KEY=sk-...
+FILTER_PROMPT=./prompts/food_annotation_prompt.txt
 
-2. Edit `.env` file with your configuration:
-```bash
-# Required: OpenAI API Key
-FILTER_CHATGPT_API_KEY=your_openai_api_key_here
-
-# Required: Path to prompt file
-FILTER_PROMPT=./prompts/annotation_prompt.txt
-
-# Optional: ChatGPT model (default: gpt-4o-mini)
-FILTER_CHATGPT_MODEL=gpt-4o-mini
-
-# Optional: API parameters
+# Optional — LLM
 FILTER_MAX_TOKENS=1000
 FILTER_TEMPERATURE=0.1
 
-# Optional: Image processing
-FILTER_MAX_IMAGE_SIZE=512
+# Optional — image processing
+FILTER_MAX_IMAGE_SIZE=0    # 0 = original
 FILTER_IMAGE_QUALITY=85
 
-# Optional: Output configuration
-FILTER_SAVE_FRAMES=false
+# Optional — output
+FILTER_SAVE_FRAMES=true
 FILTER_OUTPUT_DIR=./output_frames
+FILTER_OUTPUT_SCHEMA={"lettuce":{"present":false,"confidence":0.0},"tomato":{"present":false,"confidence":0.0}}
 
-# Optional: Output schema (JSON string)
-FILTER_OUTPUT_SCHEMA={"item1": {"present": false, "confidence": 0.0}, "item2": {"present": false, "confidence": 0.0}}
-
-# Optional: Topic filtering
+# Optional — topic filtering / forwarding
 FILTER_TOPIC_PATTERN=.*
 FILTER_EXCLUDE_TOPICS=debug,test
-
-# Optional: Topic forwarding (preserve main topic alongside processed results)
 FILTER_FORWARD_MAIN=false
 
-# Optional: No-ops mode (skip API calls for testing)
+# Optional — testing
 FILTER_NO_OPS=false
 ```
 
-### Configuration Matrix
+### Configuration matrix
 
 | Variable | Type | Default | Required | Notes |
-|----------|------|---------|----------|-------|
-| `chatgpt_model` | string | "gpt-4o-mini" | Yes | Model name |
-| `chatgpt_api_key` | string | "" | Yes | API key |
-| `prompt` | string | "" | Yes | Path to prompt file (.txt) |
-| `output_schema` | dict | {} | No | Defines expected labels and defaults |
-| `max_tokens` | int | 1000 | No | Max response tokens |
-| `temperature` | float | 0.1 | No | Controls randomness |
-| `max_image_size` | int | 0 | No | Max image size (0 = keep original) |
-| `image_quality` | int | 85 | No | JPEG quality (1-100) |
-| `save_frames` | bool | true | No | Save JSON per frame |
-| `output_dir` | string | "./output_frames" | No | Where to save JSON output |
-| `forward_main` | bool | false | No | Forward main topic to output |
-| `no_ops` | bool | false | No | Skip API calls for testing |
-| `confidence_threshold` | float | 0.9 | No | Confidence threshold for positive classification (0.0-1.0) |
+|---|---|---|---|---|
+| `chattag_model` | string | `openai:gpt-4o-mini` | Yes | LangChain `provider:model` string |
+| `prompt` | string | `""` | Yes | Path to prompt file (.txt) |
+| `output_schema` | dict | `{}` | No | Labels + defaults; enforced via Pydantic |
+| `max_tokens` | int | `1000` | No | Max response tokens |
+| `temperature` | float | `0.1` | No | Controls randomness |
+| `max_image_size` | int | `0` | No | Max image side in px (0 = original) |
+| `image_quality` | int | `85` | No | JPEG quality (1–100) |
+| `save_frames` | bool | `true` | No | Persist per-frame results |
+| `output_dir` | string | `./output_frames` | No | Where to save results |
+| `forward_main` | bool | `false` | No | Forward main topic to output |
+| `no_ops` | bool | `false` | No | Skip LLM calls (testing) |
+| `confidence_threshold` | float | `0.9` | No | Positive-class threshold for dataset generators |
 
-## Usage
+Credentials are NOT a config field — set the provider's native env var (`OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OLLAMA_HOST`). LangChain reads them automatically.
 
-### No-Ops Mode (Testing)
+## Architecture
 
-For testing and development, you can enable no-ops mode to skip API calls:
+The filter follows the standard OpenFilter `setup → process → shutdown` lifecycle:
 
-```bash
-# Enable no-ops mode
-export FILTER_NO_OPS=true
+| Stage | Responsibility |
+|---|---|
+| `setup()` | Validate config; build the LangChain chat model via `init_chat_model`; wrap it with `with_structured_output(Pydantic)` derived from `FILTER_OUTPUT_SCHEMA`; load prompt file |
+| `process()` | For each frame: BGR→base64, build a multimodal `HumanMessage`, invoke the chain, normalize annotations, attach to `frame.data["meta"]["chattag"]` |
+| `shutdown()` | Generate binary + balanced + COCO multilabel datasets from `labels.jsonl` |
 
-# Run the filter (will skip API calls and use default annotations)
-python scripts/filter_annotation_batch.py
-```
+### Data signature
 
-In no-ops mode:
-- ✅ Images are still processed and resized
-- ✅ JSON files are still generated with default annotations
-- ✅ Binary datasets are still created on shutdown
-- ❌ No API calls are made to ChatGPT
-- ❌ No API costs are incurred
+Processed frames carry results under `frame.data["meta"]["chattag"]` (see [docs/output_contract.md](docs/output_contract.md)):
 
-This is useful for:
-- Testing the pipeline without API costs
-- Validating image processing and file generation
-- Development and debugging
+- `schema_version` — contract version (e.g. `"1.0"`)
+- `annotations` — `{label_name: {present: bool, confidence: float}}`
+- `usage` — `{input_tokens, output_tokens, total_tokens}` (from `AIMessage.usage_metadata`)
+- `processing_time`, `timestamp`, `model`, `frame_id`
+- `error` — present when processing failed
 
-### Image Size Configuration
+### Topic forwarding
 
-The `max_image_size` parameter controls image resizing for API cost optimization:
+`forward_main=True` preserves the original `main` topic alongside processed topics in the output dict — useful when downstream filters need the unmodified frame.
 
-```bash
-# Keep original image size (highest quality, highest cost)
-export FILTER_MAX_IMAGE_SIZE=0
-
-# Resize to 512px (good quality, moderate cost)
-export FILTER_MAX_IMAGE_SIZE=512
-
-# Resize to 256px (lower quality, lowest cost)
-export FILTER_MAX_IMAGE_SIZE=256
-```
-
-**Cost Impact:**
-- `0` (original): ~$0.15/image (high quality)
-- `512px`: ~$0.01/image (good quality)
-- `256px`: ~$0.005/image (lower quality)
-
-### Topic Forwarding Configuration
-
-The `forward_main` parameter controls whether the main topic from input frames is forwarded to the output:
-
-```bash
-# Forward main topic to preserve original frame (recommended for pipelines)
-export FILTER_FORWARD_MAIN=true
-
-# Don't forward main topic (only processed results)
-export FILTER_FORWARD_MAIN=false
-```
-
-**Use Cases:**
-- **Pipeline Processing**: When you want to preserve the original main frame for downstream filters
-- **Multi-topic Processing**: When processing specific topics but want to keep the main frame intact
-- **Data Preservation**: When you need both processed results and original frame data
-
-**Output Behavior:**
-- **With `forward_main=True`**: Output includes both processed topics and the original main topic
-- **With `forward_main=False`**: Output includes only processed topics
-
-**Example Output Structure:**
-```python
-# With forward_main=True
-{
-    "main": Frame(original_image, original_data, "BGR"),           # Original main frame
-    "processed_topic_1": Frame(image, results_metadata, "BGR"),   # Processed frame
-    "processed_topic_2": Frame(image, results_metadata, "BGR")    # Processed frame
-}
-
-# With forward_main=False
-{
-    "processed_topic_1": Frame(image, results_metadata, "BGR"),   # Processed frame
-    "processed_topic_2": Frame(image, results_metadata, "BGR")    # Processed frame
-}
-```
-
-### Save Frames Configuration
-
-The `save_frames` parameter controls whether to save individual JSON files:
-
-```bash
-# Save JSON files (default - recommended)
-export FILTER_SAVE_FRAMES=true
-
-# Don't save files (only show in web interface)
-export FILTER_SAVE_FRAMES=false
-```
-
-**Benefits of saving frames:**
-- ✅ **Processed images** - Images saved in `data/` subfolder with unique names
-- ✅ **JSONL dataset** - Results saved in dataset_langchain format
-- ✅ **Binary datasets** - Automatically generated for ML training
-- ✅ **Debugging** - Can inspect individual frame results and images
-- ✅ **Batch processing** - Results available after pipeline ends
-
-**When to disable:**
-- Quick testing without file clutter
-- Web visualization only
-- Temporary analysis
-
-### Confidence Threshold Configuration
-
-The `confidence_threshold` parameter controls the minimum confidence score required to classify an item as "present" in the generated datasets:
-
-```bash
-# Default: 90% confidence required
-export FILTER_CONFIDENCE_THRESHOLD=0.9
-
-# More lenient: 70% confidence required
-export FILTER_CONFIDENCE_THRESHOLD=0.7
-
-# Very strict: 95% confidence required
-export FILTER_CONFIDENCE_THRESHOLD=0.95
-```
-
-**How it works:**
-- **Confidence ≥ threshold** → Item classified as **PRESENT** (positive class)
-- **Confidence < threshold** → Item classified as **ABSENT** (negative class)
-
-**Examples:**
-```json
-{
-  "avocado": {
-    "present": true,
-    "confidence": 0.92  // ✅ 92% ≥ 90% → "avocado" (with threshold=0.9)
-  },
-  "tomato": {
-    "present": true,
-    "confidence": 0.85  // ❌ 85% < 90% → "absent" (with threshold=0.9)
-  }
-}
-```
-
-**Recommended values:**
-- **0.9 (90%)** - Default, high precision
-- **0.8 (80%)** - Balanced precision/recall
-- **0.7 (70%)** - Higher recall, more lenient
-- **0.95 (95%)** - Very high precision, strict
-
-### Output Structure
-
-When `save_frames=true`, the following structure is created:
+## Output structure (with `save_frames=true`)
 
 ```
 ./output_frames/
-├── data/                     # Processed images subfolder
-│   ├── 0_1758035382121.jpg  # Frame 0 with timestamp
-│   ├── 1_1758035382122.jpg  # Frame 1 with timestamp
-│   └── 2_1758035382123.jpg  # Frame 2 with timestamp
-├── labels.jsonl              # One JSON line per frame (see docs/output_contract.md)
-└── binary_datasets/          # Generated automatically on shutdown (overwrites existing)
-    ├── item1_labels.json
-    ├── item2_labels.json
-    ├── item3_labels.json
-    ├── item4_labels.json
-    └── _summary_report.json
-└── binary_datasets_balanced/ # Balanced datasets (equal class representation)
-    ├── item1_labels.json
-    ├── item2_labels.json
-    ├── item3_labels.json
-    ├── item4_labels.json
-    └── _summary_report.json  # Summary report (highlighted with underscore)
-└── multilabel_datasets/      # When multiple labels in schema: COCO-style annotations.json
-    ├── annotations.json
-    └── _summary_report.json
+├── data/                       # Processed images
+├── labels.jsonl                # One JSON line per frame (see docs/output_contract.md)
+├── binary_datasets/            # Generated on shutdown
+├── binary_datasets_balanced/   # Balanced (equal class) variant
+└── multilabel_datasets/        # COCO export when schema has >1 label
 ```
 
-**Important Notes:**
-- **Binary datasets are overwritten** on each run to ensure they reflect the latest processing results
-- **Images are saved incrementally** during processing (append mode)
-- **JSONL file is appended** during processing, not overwritten
-- **Summary report is regenerated** on each shutdown
-- **Balanced datasets** are generated automatically
+Binary datasets are overwritten on each run; `labels.jsonl` and `data/` are append-only.
 
-### Basic Pipeline
+## Confidence threshold
 
-Run the complete annotation pipeline:
+`FILTER_CONFIDENCE_THRESHOLD` controls the cutoff used by the dataset generators on shutdown — `confidence ≥ threshold` → positive class, otherwise `absent`. Defaults to `0.9` (high precision). Lower it for higher recall.
+
+## No-ops mode
 
 ```bash
-python scripts/filter_food_annotation.py
+export FILTER_NO_OPS=true
 ```
 
-This will:
-1. Load video from `VIDEO_PATH` environment variable
-2. Process frames with ChatGPT Vision API using the specified prompt
-3. Display results in web interface at `http://localhost:8000`
+Wires up the pipeline without making any LLM calls — images are still processed and saved, default annotations are emitted. Use for plumbing/integration tests without burning credits.
 
-### Using Makefile
+## Usage scenarios
 
 ```bash
-# Run with example video
-make run-example
-
-# Run with custom video
-VIDEO_PATH=/path/to/video.mp4 make run-custom
-
-# Check environment
-make check-env
-
-# Run tests
-make test
-```
-
-## Usage Scenarios
-
-### 1. Example Dataset (Food Analysis)
-Detect items with confidence levels (example):
-
-```bash
+# Food annotation
 export FILTER_PROMPT="./prompts/food_annotation_prompt.txt"
-export FILTER_OUTPUT_SCHEMA='{"lettuce": {"present": false, "confidence": 0.0}, "tomato": {"present": false, "confidence": 0.0}}'
+export FILTER_OUTPUT_SCHEMA='{"lettuce":{"present":false,"confidence":0.0},"tomato":{"present":false,"confidence":0.0}}'
 python scripts/filter_food_annotation.py
-```
 
-### 2. Pet Classification
-Detect presence of cats/dogs:
-
-```bash
+# Pet classification (Gemini)
+export FILTER_CHATTAG_MODEL=google_genai:gemini-2.0-flash
 export FILTER_PROMPT="./prompts/pet_classification_prompt.txt"
-export FILTER_OUTPUT_SCHEMA='{"cat": {"present": false, "confidence": 0.0}, "dog": {"present": false, "confidence": 0.0}}'
+export FILTER_OUTPUT_SCHEMA='{"cat":{"present":false,"confidence":0.0},"dog":{"present":false,"confidence":0.0}}'
 python scripts/filter_pet_classification.py
+
+# Multilabel (Claude, with COCO export on shutdown)
+export FILTER_CHATTAG_MODEL=anthropic:claude-3-5-sonnet-latest
+python scripts/filter_multilabel.py
 ```
 
-### 3. Medical Imaging
-Detect medical conditions (research/educational only):
+## Prompt format
 
-```bash
-export FILTER_PROMPT="./prompts/medical_imaging_prompt.txt"
-export FILTER_OUTPUT_SCHEMA='{"tumor": {"present": false, "confidence": 0.0}, "calcification": {"present": false, "confidence": 0.0}}'
-python scripts/filter_medical_imaging.py
+Prompts should clearly describe the task and the expected labels. Because LangChain enforces the output structure via Pydantic, prompts no longer need to insist as heavily on "return only valid JSON" — the provider's tool-calling layer handles that — but it remains a good idea to include the expected label list and rules for uncertainty.
+
+```text
+You are a vision analyst. Given an image, decide whether each of the
+following items is visibly present:
+
+ITEMS = ["cat", "dog"]
+
+For each item, return:
+  present: true if you can see it in the image, else false
+  confidence: 0.0–1.0 reflecting your certainty
 ```
 
-### 4. Industrial Quality
-Detect defects in assembly line images:
-
-```bash
-export FILTER_PROMPT="./prompts/industrial_quality_prompt.txt"
-export FILTER_SAVE_FRAMES="true"
-export FILTER_OUTPUT_DIR="./quality_results"
-python scripts/filter_industrial_quality.py
-```
-
-### 5. Pipeline Integration with Topic Forwarding
-Preserve main topic for downstream processing:
-
-```bash
-export FILTER_PROMPT="./prompts/annotation_prompt.txt"
-export FILTER_FORWARD_MAIN="true"  # Preserve main topic
-export FILTER_OUTPUT_SCHEMA='{"item1": {"present": false, "confidence": 0.0}, "item2": {"present": false, "confidence": 0.0}}'
-python scripts/filter_annotation.py
-```
-
-This configuration ensures that:
-- The original main frame is preserved for downstream filters
-- Processed results are available alongside the original data
-- Pipeline compatibility is maintained
-
-## Prompt Format & Importance
-
-The prompt format is critical for annotation quality. Prompts must:
-
-- Define the exact list of items to check
-- Enforce output as strict JSON only (no extra text)
-- Provide clear rules for uncertainty and confidence scoring
-
-### Example Prompt (Generic Dataset)
-
-```
-You are a vision analyst. Given an image, determine whether each of the following items is visibly present.
-Return ONLY valid JSON with keys: "present" (boolean) and "confidence" (0-1).
-ITEMS = ["item1", "item2", "item3", "item4", "item5", ...]
-```
-
-### Example Prompt (Pets Dataset)
-
-```
-You are a vision analyst. Given an image, determine whether it contains a cat or a dog.
-Return ONLY valid JSON with:
-{
-  "cat": {"present": <true|false>, "confidence": <0-1>},
-  "dog": {"present": <true|false>, "confidence": <0-1>}
-}
-Rules:
-- If unsure, set present=false and confidence ≤0.3.
-- Base decision only on visible image content.
-```
-
-## Standard Output Format
-
-All annotations follow this standardized format:
-
-```json
-{
-  "item_name": {
-    "present": true|false,
-    "confidence": 0.0-1.0
-  }
-}
-```
-
-### Example saved JSONL line
+## Output example
 
 ```json
 {
   "schema_version": "1.0",
   "image": "001.png",
   "labels": {
-    "cat": {"present": true, "confidence": 0.92},
+    "cat": {"present": true,  "confidence": 0.92},
     "dog": {"present": false, "confidence": 0.15}
   },
-  "usage": {
-    "input_tokens": 26288,
-    "output_tokens": 414,
-    "total_tokens": 26702
-  },
+  "usage": {"input_tokens": 26288, "output_tokens": 414, "total_tokens": 26702},
   "prompt_used": "pet_classification_prompt.txt"
 }
 ```
 
 Full contract: [docs/output_contract.md](docs/output_contract.md).
 
-## Available Scripts
-
-The `scripts/` directory contains example implementations for different use cases:
-
-- **`filter_food_annotation.py`**: Example food item detection
-- **`filter_pet_classification.py`**: Cat/dog classification
-- **`filter_medical_imaging.py`**: Medical image analysis (research only)
-- **`filter_industrial_quality.py`**: Quality inspection and defect detection
-
-See [scripts/README.md](scripts/README.md) for detailed usage instructions.
-
-## Cost Optimization
-
-### Image Processing
-- **Resize Images**: Use `FILTER_MAX_IMAGE_SIZE=256` for faster processing
-- **Quality Settings**: Lower `FILTER_IMAGE_QUALITY` to reduce token usage
-- **Model Selection**: Use `gpt-4o-mini` for cost-effective processing
-
-### Token Management
-- **Token Limits**: Reduce `FILTER_MAX_TOKENS` for simpler tasks
-- **Prompt Optimization**: Keep prompts concise and focused
-- **Batch Processing**: Process multiple frames efficiently
-
-## Development
-
-### Project Structure
+## Project layout
 
 ```
-filter-chatgpt-annotator/
-├── filter_chatgpt_annotator/
-│   └── filter.py              # Main filter implementation
-├── scripts/                   # Example usage scripts
-│   ├── filter_food_annotation.py
-│   ├── filter_pet_classification.py
-│   ├── filter_medical_imaging.py
-│   ├── filter_industrial_quality.py
-│   └── README.md
+filter-chatgpt-annotator/        # repo root, also the PyPI distribution name
+├── filter_chattag/                 # import package (renamed in v0.3.0)
+│   └── filter.py              # Main filter implementation (LangChain)
+├── scripts/                   # Example pipelines
 ├── prompts/                   # Example prompt files
-│   ├── food_annotation_prompt.txt
-│   ├── pet_classification_prompt.txt
-│   ├── medical_imaging_prompt.txt
-│   └── industrial_quality_prompt.txt
-├── tests/                     # Test files
-├── env.example               # Environment configuration example
-└── pyproject.toml           # Project dependencies
+├── tests/
+├── schemas/chattag_output.schema.json  # JSON Schema for the output contract
+├── docs/                      # Output contract, usage guide, examples, providers
+├── env.example
+└── pyproject.toml
 ```
 
-### Key Dependencies
+### Key dependencies
 
-- `openai>=1.0.0` - ChatGPT Vision API client
-- `openfilter[all]>=0.1.0` - Filter framework
-- `opencv-python>=4.8.0` - Image processing
-- `pillow>=9.0.0` - Image manipulation
-- `python-dotenv>=1.0.0` - Environment configuration
+- `langchain>=0.3,<0.4` + `langchain-openai`, `langchain-google-genai`, `langchain-anthropic`, `langchain-ollama`
+- `pydantic>=2.0,<3.0`
+- `openfilter[all]>=1.1.0,<2.0.0`
+- `opencv-python>=4.8.0`, `pillow>=9.0.0`, `python-dotenv>=1.0.0`
 
-### Testing
+## Testing
 
 ```bash
-# Run tests
 make test
-
-# Run tests with coverage
-make test-cov
-
-# Check code quality
-make lint
-
-# Format code
-make format
+make test-coverage
 ```
+
+The offline test suite mocks LangChain and never hits a real provider. Integration tests against real providers are not run by default.
 
 ## Troubleshooting
 
-### API Key Issues
-If you get API key errors:
-1. Check that `FILTER_CHATGPT_API_KEY` is set correctly in `.env`
-2. Verify your OpenAI API key is valid and has sufficient credits
-3. Ensure the key has access to the Vision API
-
-### Prompt File Not Found
-If you get prompt file errors:
-1. Check that `FILTER_PROMPT` points to an existing file
-2. Verify the prompt file contains valid text
-3. Ensure the prompt returns valid JSON format
-
-### JSON Parse Errors
-If ChatGPT returns invalid JSON:
-1. Review your prompt to ensure it enforces JSON-only output
-2. Add validation rules in the prompt
-3. Check the filter logs for the raw response
-
-### Performance Issues
-If processing is slow:
-1. Reduce `FILTER_MAX_IMAGE_SIZE` to 256 or 128
-2. Lower `FILTER_IMAGE_QUALITY` to 70-80
-3. Use `gpt-4o-mini` instead of `gpt-4o`
-4. Reduce `FILTER_MAX_TOKENS` for simpler tasks
-
-### Cost Optimization
-To reduce API costs:
-1. Use smaller image sizes (`FILTER_MAX_IMAGE_SIZE=256`)
-2. Lower image quality (`FILTER_IMAGE_QUALITY=70`)
-3. Optimize prompts to be more concise
-4. Use `gpt-4o-mini` model
-5. Set appropriate token limits
-
-## Open Questions & Next Steps
-
-- Should the filter enforce JSON Schema validation instead of simple type casting?
-- Should prompts be standardized into a prompt library by domain?
-- Should batch multi-image requests be supported for efficiency?
-- What metrics (tokens, cost, latency) should be exposed for monitoring?
-- Should we allow provider abstraction (Gemini, Claude) in the next iteration?
+- **`Authentication`/`401` errors** — the provider's native env var (`OPENAI_API_KEY` etc.) isn't reaching the process. `make run` and `docker-compose` need it exported in the parent shell or set under `environment:` in the compose file.
+- **`Provider 'X' not supported`** — the matching `langchain-X` package isn't installed; the four officially supported ones ship by default. To use something else, `pip install` it and use its provider prefix.
+- **Garbled annotations from Ollama** — vision-capable Ollama models (e.g. `llava`, `llama3.2-vision`) are required; text-only models will refuse the image content.
+- **Slow processing** — set `FILTER_MAX_IMAGE_SIZE=512` and use a smaller model (`gpt-4o-mini`, `gemini-2.0-flash`, `claude-3-5-haiku-latest`).
 
 ## Documentation
 
-For more detailed information, configuration examples, and advanced usage scenarios, see the [comprehensive documentation](https://github.com/PlainsightAI/filter-chatgpt-annotator/blob/main/docs/overview.md).
+- [Output contract](docs/output_contract.md)
+- [Usage guide](docs/filter_usage_guide.md)
+- [Usage examples](docs/usage_examples.md)
+- [Adding more providers](docs/adding_other_llms.md)
+- [Architecture diagram](docs/architecture_diagram.txt)
+- [Migration from `filter-chatgpt-annotator`](MIGRATION.md)
 
 ## License
 
-See LICENSE file for details.
+See [LICENSE](LICENSE) for details.

@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 
 """
-Example script for multilabel classification (e.g. avocado, fish) with FilterChatgptAnnotator.
+Example script for multilabel classification (e.g. avocado, fish) with FilterChatTag.
 
 Required environment variables in .env file:
-    FILTER_CHATGPT_API_KEY: OpenAI API key
+    FILTER_CHATTAG_MODEL: LangChain model string (e.g. "openai:gpt-4o-mini")
+    OPENAI_API_KEY / GOOGLE_API_KEY / ANTHROPIC_API_KEY / OLLAMA_HOST: provider credential
     FILTER_PROMPT: Path to the prompt file
     VIDEO_PATH: Path to the input video file
 
@@ -16,61 +17,46 @@ Output when saving frames:
 import os
 from dotenv import load_dotenv
 
-# Load .env file
 load_dotenv()
 
 from openfilter.filter_runtime.filter import Filter
-from filter_chatgpt_annotator.filter import FilterChatgptAnnotator, FilterChatgptAnnotatorConfig
+from filter_chattag.filter import FilterChatTag, FilterChatTagConfig
 from openfilter.filter_runtime.filters.video_in import VideoIn
 from openfilter.filter_runtime.filters.webvis import Webvis
 
 
 if __name__ == '__main__':
-    # Get video path from environment variable
     video_path = os.getenv('VIDEO_PATH', '')
-    
-    # Get prompt path from environment variable
     prompt_path = os.getenv('FILTER_PROMPT', './prompts/salad_prompt_multilabel.txt')
-    
-    # Get API key from environment variable
-    api_key = os.getenv('FILTER_CHATGPT_API_KEY', '')
-    
-    
-    if not api_key:
-        print("Error: FILTER_CHATGPT_API_KEY environment variable is required")
-        print("Please set your OpenAI API key in the .env file")
-        exit(1)
-    
-    # Check if we have video path
+    chattag_model = os.getenv('FILTER_CHATTAG_MODEL', 'openai:gpt-4o-mini')
+
     if not video_path:
         print("Error: VIDEO_PATH environment variable is required")
         print("Please set the path to your input video in the .env file")
         exit(1)
 
-    # Use VideoIn for video processing (processes all frames)
     input_source = (VideoIn, dict(
-        sources=f'file://{video_path}!sync!no-loop;main',  # Process video, no loop, topic: main, sync
+        sources=f'file://{video_path}!sync!no-loop;main',
         outputs='tcp://*:5550',
     ))
     print(f"Using VideoIn with path: {video_path} (no loop, sync)")
-    
-    # Show output configuration
+
     output_dir = os.getenv('FILTER_OUTPUT_DIR', './output_frames')
     save_frames = os.getenv('FILTER_SAVE_FRAMES', 'true').lower() == 'true'
     if save_frames:
         print(f"Results will be saved to: {output_dir}")
-        print("📊 Binary classification datasets will be generated")
-        print("📦 COCO format multilabel dataset will be generated (multilabel_datasets/)")
+        print("Binary classification datasets will be generated")
+        print("COCO format multilabel dataset will be generated (multilabel_datasets/)")
     else:
         print("Results will only be shown in web interface (not saved to files)")
 
     Filter.run_multi([
         input_source,
-        (FilterChatgptAnnotator, FilterChatgptAnnotatorConfig(
-            id="filter_chatgpt_avocado_fish_multilabel",
+        (FilterChatTag, FilterChatTagConfig(
+            id="filter_chattag_avocado_fish_multilabel",
             sources="tcp://localhost:5550",
             outputs="tcp://*:5552",
-            chatgpt_api_key=api_key,
+            chattag_model=chattag_model,
             prompt=prompt_path,
             max_image_size=0,
             image_quality=98,
@@ -83,7 +69,6 @@ if __name__ == '__main__':
             }
         )),
         (Webvis, dict(
-            # sources='tcp://localhost:5550',
-            sources='tcp://localhost:5552',  # Main stream with annotations
+            sources='tcp://localhost:5552',
         )),
     ])

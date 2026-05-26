@@ -2,23 +2,23 @@
 # Repo-specific variables
 # ---------------------------------
 
-IMAGE ?= plainsightai/openfilter-chatgpt-annotator
-MODEL_IMAGE ?= plainsightai/openfilter-chatgpt-annotator-model
+IMAGE ?= plainsightai/openfilter-chattag
+MODEL_IMAGE ?= plainsightai/openfilter-chattag-model
 
 # Define these variables for consistency in the repo
-REPO_NAME ?= filter-chatgpt-annotator
-REPO_NAME_SNAKECASE ?= filter_chatgpt_annotator
-REPO_NAME_PASCALCASE ?= FilterChatgptAnnotator
+REPO_NAME ?= filter-chattag
+REPO_NAME_SNAKECASE ?= filter_chattag
+REPO_NAME_PASCALCASE ?= FilterChatTag
 
 # Unique pipeline configuration for this repo
 PIPELINE := \
 	- VideoIn \
 		--sources file://data/sample-video.mp4!loop \
 		--outputs 'tcp://*:5550' \
-  - filter_chatgpt_annotator.filter.FilterChatgptAnnotator \
+  - filter_chattag.filter.FilterChatTag \
       --sources 'tcp://localhost:5550' \
       --outputs 'tcp://*:5552' \
-      --chatgpt_api_key 'sk-open-ai-key' \
+      --chattag_model 'openai:gpt-4o-mini' \
       --prompt './prompts/simple_salad_prompt.txt' \
       --output_schema '{"avocado":{"present":false,"confidence":0.0},"lettuce":{"present":false,"confidence":0.0},"tomato":{"present":false,"confidence":0.0}}' \
       --mq_log pretty \

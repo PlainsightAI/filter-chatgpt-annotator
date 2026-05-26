@@ -4,111 +4,83 @@ import json
 import base64
 import time
 from pathlib import Path
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional, Type
 from PIL import Image
 import io
 
 from openfilter.filter_runtime.filter import FilterConfig, Filter, Frame
 
-__all__ = ['FilterChatgptAnnotatorConfig', 'FilterChatgptAnnotator', 'CHATTAG_OUTPUT_SCHEMA_VERSION']
+__all__ = ['FilterChatTagConfig', 'FilterChatTag', 'CHATTAG_OUTPUT_SCHEMA_VERSION']
 
 logger = logging.getLogger(__name__)
 
 # OpenFilter / JSONL output contract (see docs/output_contract.md)
 CHATTAG_OUTPUT_SCHEMA_VERSION = "1.0"
 
+# Frame metadata key under frame.data["meta"][...] where ChatTag stores its results.
+CHATTAG_META_KEY = "chattag"
 
-class FilterChatgptAnnotatorConfig(FilterConfig):
-    # ChatGPT API configuration
-    chatgpt_model: str = "gpt-4o-mini"
-    # chatgpt_model: str = "gpt-4o"
-    chatgpt_api_key: str = ""
+
+class FilterChatTagConfig(FilterConfig):
+    # LangChain model string: "provider:model" (e.g. "openai:gpt-4o-mini",
+    # "google_genai:gemini-2.0-flash", "anthropic:claude-3-5-sonnet-latest",
+    # "ollama:llava"). Credentials come from the provider's native env vars
+    # (OPENAI_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, OLLAMA_HOST).
+    chattag_model: str = "openai:gpt-4o-mini"
+
     prompt: str = ""
     output_schema: Dict[str, Any] = {}
-    
-    # API parameters
+
+    # LLM parameters
     max_tokens: int = 1000
     temperature: float = 0.1
-    
+
     # Image processing
     max_image_size: int = 0  # 0 = keep original size
-    image_quality: int = 95  # High quality to preserve original image quality
-    preserve_original_format: bool = True  # Try to preserve original image format when possible
-    
+    image_quality: int = 95
+    preserve_original_format: bool = True
+
     # Output options
     save_frames: bool = True
     output_dir: str = "./output_frames"
-    
+
     # Topic filtering
     topic_pattern: str = None
     exclude_topics: list = []
-    
+
     # Forward main topic to output
     forward_main: bool = False
-    
-    # No-ops mode (skip API calls for testing)
+
+    # No-ops mode (skip LLM calls for testing)
     no_ops: bool = False
-    
+
     # Debug metadata logging
     debug_metadata: bool = False
-    
+
     # Confidence threshold for positive classification (0.0 to 1.0)
     confidence_threshold: float = 0.9
 
 
-class FilterChatgptAnnotator(Filter):
+class FilterChatTag(Filter):
     """
-    Filter that uses ChatGPT Vision API for image annotation and analysis.
-    
-    This filter processes video frames using ChatGPT Vision API to extract structured 
-    annotations and labels based on configurable prompts and standardized output schemas.
-    
-    Data Signature:
-    --------------
-    The filter returns processed frames with the following data structure:
-    
-    Main Frame Data:
-    - Original frame data preserved
-    - Processing results added to frame metadata:
-      - schema_version: Output contract version string
-      - annotations: Dict with item_name -> {"present": bool, "confidence": float}
-      - usage: Dict with token usage information
-      - processing_time: Processing time in seconds
-      - timestamp: Processing timestamp
-      - error: Error message if processing failed
-    
-    Topic Forwarding:
-    ----------------
-    The `forward_main` parameter controls whether the main topic from input frames 
-    is forwarded to the output:
-    
-    - When `forward_main=True`: The main topic from input frames is preserved and 
-      forwarded to the output alongside processed results
-    - When `forward_main=False`: Only processed frames are returned (no main topic forwarding)
-    
-    This is useful in pipeline scenarios where you want to preserve the original 
-    main frame alongside processed results for downstream filters.
-    
-    Key Features:
-    - Configurable prompts for different annotation tasks
-    - Standardized JSON output format with confidence scores
-    - Image resizing to optimize API costs
-    - Fault tolerant: logs and skips malformed data
-    - Support for diverse datasets (any domain with image classification needs)
-    - Optional frame persistence for auditing/debugging
-    - Topic forwarding for pipeline compatibility
-    - Automatic binary classification dataset generation when saving frames
-    - COCO JSON under multilabel_datasets/ when output_schema has more than one label (full-image box per active label)
+    LangChain-powered multi-provider vision annotator.
+
+    Sends each frame to a configurable chat model (OpenAI, Google Gemini,
+    Anthropic Claude, or Ollama) and stores structured annotations in frame
+    metadata under ``frame.data["meta"]["chattag"]``.
+
+    The model is selected via ``chattag_model`` (env: ``FILTER_CHATTAG_MODEL``)
+    using LangChain's ``init_chat_model`` "provider:model" syntax. Output
+    structure is enforced via ``with_structured_output(Pydantic)`` so every
+    provider returns the same shape.
     """
 
     @classmethod
-    def normalize_config(cls, config: FilterChatgptAnnotatorConfig):
-        config = FilterChatgptAnnotatorConfig(super().normalize_config(config))
+    def normalize_config(cls, config: FilterChatTagConfig):
+        config = FilterChatTagConfig(super().normalize_config(config))
 
-        # Environment variable mapping with type information
         env_mapping = {
-            "chatgpt_model": (str, str.strip),
-            "chatgpt_api_key": (str, str.strip),
+            "chattag_model": (str, str.strip),
             "prompt": (str, str.strip),
             "max_tokens": (int, lambda x: int(x.strip())),
             "temperature": (float, lambda x: float(x.strip())),
@@ -124,7 +96,6 @@ class FilterChatgptAnnotator(Filter):
             "confidence_threshold": (float, lambda x: float(x.strip())),
         }
 
-        # Process environment variables
         for key, (expected_type, converter) in env_mapping.items():
             env_key = f"FILTER_{key.upper()}"
             env_val = os.getenv(env_key)
@@ -141,7 +112,6 @@ class FilterChatgptAnnotator(Filter):
                         f"Failed to convert environment variable {env_key}: {str(e)}"
                     )
 
-        # Handle output_schema from environment (JSON string)
         output_schema_env = os.getenv("FILTER_OUTPUT_SCHEMA")
         if output_schema_env:
             try:
@@ -149,95 +119,45 @@ class FilterChatgptAnnotator(Filter):
             except json.JSONDecodeError as e:
                 raise ValueError(f"Invalid JSON in FILTER_OUTPUT_SCHEMA: {str(e)}")
 
-        # Handle exclude_topics from environment (comma-separated)
         exclude_topics_env = os.getenv("FILTER_EXCLUDE_TOPICS")
         if exclude_topics_env:
             config.exclude_topics = [topic.strip() for topic in exclude_topics_env.split(",") if topic.strip()]
 
-        # Validate required parameters
-        if not config.chatgpt_api_key:
-            raise ValueError("chatgpt_api_key is required (set FILTER_CHATGPT_API_KEY)")
-        
+        if not config.chattag_model:
+            raise ValueError("chattag_model is required (set FILTER_CHATTAG_MODEL, e.g. 'openai:gpt-4o-mini')")
+
         if not config.prompt:
             raise ValueError("prompt is required (set FILTER_PROMPT)")
 
-        # Validate parameter ranges
         if config.max_tokens <= 0:
             raise ValueError("max_tokens must be positive")
-        
+
         if config.temperature < 0 or config.temperature > 2:
             raise ValueError("temperature must be between 0 and 2")
-        
+
         if config.max_image_size < 0:
             raise ValueError("max_image_size must be non-negative (0 = keep original size)")
-        
+
         if config.image_quality < 1 or config.image_quality > 100:
             raise ValueError("image_quality must be between 1 and 100")
-        
+
         if config.confidence_threshold < 0.0 or config.confidence_threshold > 1.0:
             raise ValueError("confidence_threshold must be between 0.0 and 1.0")
 
-        # Validate prompt file exists
         if config.prompt and not os.path.exists(config.prompt):
             raise FileNotFoundError(f"Prompt file not found: {config.prompt}")
 
-        # Log normalized config with masked API key
-        masked_config = cls._mask_api_key_in_config(config)
-        logger.debug(f"Normalized config: {masked_config}")
+        logger.debug(f"Normalized config: {config}")
         return config
 
-    @classmethod
-    def _mask_api_key_in_config(cls, config: FilterChatgptAnnotatorConfig) -> dict:
-        """
-        Create a masked version of config for logging (hides API key).
-        
-        Args:
-            config: FilterChatgptAnnotatorConfig object
-            
-        Returns:
-            dict: Config dict with masked API key
-        """
-        config_dict = {
-            'id': config.id,
-            'sources': config.sources,
-            'outputs': config.outputs,
-            'chatgpt_api_key': cls._mask_api_key(config.chatgpt_api_key),
-            'prompt': config.prompt,
-            'save_frames': config.save_frames,
-            'output_schema': config.output_schema,
-            'pipeline_id': config.pipeline_id,
-            'device_name': config.device_name
-        }
-        return config_dict
+    def setup(self, config: FilterChatTagConfig):
+        logger.info("========= Setting up FilterChatTag =========")
 
-    @staticmethod
-    def _mask_api_key(api_key: str) -> str:
-        """
-        Mask API key showing only first 8 and last 4 characters.
-        
-        Args:
-            api_key: Original API key
-            
-        Returns:
-            str: Masked API key
-        """
-        if not api_key or len(api_key) < 12:
-            return "***masked***"
-        
-        return f"{api_key[:8]}...{api_key[-4:]}"
+        self.config: FilterChatTagConfig = config
+        logger.info(f"FilterChatTag config: {config}")
 
-    def setup(self, config: FilterChatgptAnnotatorConfig):
-        logger.info("========= Setting up FilterChatgptAnnotator =========")
-        
-        # Store config for later use
-        self.config: FilterChatgptAnnotatorConfig = config
-        
-        # Log config with masked API key
-        masked_config = self._mask_api_key_in_config(config)
-        logger.info(f"FilterChatgptAnnotator config: {masked_config}")
-        
-        # Store commonly used config values as instance attributes
-        self.chatgpt_model = config.chatgpt_model
+        self.chattag_model = config.chattag_model
+        self.model = config.chattag_model  # used in result metadata
         self.max_tokens = config.max_tokens
         self.temperature = config.temperature
         self.max_image_size = config.max_image_size
@@ -247,26 +167,20 @@ class FilterChatgptAnnotator(Filter):
         self.output_dir = Path(config.output_dir) if config.save_frames else None
         self.no_ops = config.no_ops
         self.output_schema = config.output_schema
-        
-        # Initialize ChatGPT client (skip if in no-ops mode)
-        if not self.no_ops:
-            try:
-                from openai import OpenAI
-                self.client = OpenAI(api_key=config.chatgpt_api_key)
-                logger.info(f"Initialized OpenAI client with model: {config.chatgpt_model}")
-            except ImportError:
-                raise ImportError("openai package is required. Install with: pip install openai")
-            except Exception as e:
-                raise RuntimeError(f"Failed to initialize OpenAI client: {str(e)}")
-        else:
-            self.client = None
-            logger.info("Skipping OpenAI client initialization (no-ops mode)")
+        self.confidence_threshold = config.confidence_threshold
 
-        # Basename for JSONL `prompt_used` — always set so consumers never rely on getattr fallbacks
+        if not self.no_ops:
+            self._pydantic_schema = self._build_schema(self.output_schema)
+            self._chain = self._build_model(config, self._pydantic_schema)
+            logger.info(f"Initialized LangChain chat model: {config.chattag_model}")
+        else:
+            self._pydantic_schema = None
+            self._chain = None
+            logger.info("Skipping LLM initialization (no-ops mode)")
+
         _prompt_path = (getattr(config, "prompt", None) or "").strip()
         self.prompt_filename = os.path.basename(_prompt_path) if _prompt_path else ""
 
-        # Load prompt from file
         try:
             with open(config.prompt, 'r', encoding='utf-8') as f:
                 self.prompt_text = f.read().strip()
@@ -274,16 +188,14 @@ class FilterChatgptAnnotator(Filter):
         except Exception as e:
             raise RuntimeError(f"Failed to load prompt file: {str(e)}")
 
-        # Initialize output directory if saving frames
         if self.save_frames and self.output_dir:
             self.output_dir.mkdir(parents=True, exist_ok=True)
             logger.debug(f"Output directory: {self.output_dir}")
 
-        # Initialize topic filtering
         self.topic_pattern = config.topic_pattern
         self.exclude_topics = config.exclude_topics
         self.forward_main = config.forward_main
-        
+
         if self.topic_pattern:
             try:
                 import re
@@ -296,41 +208,83 @@ class FilterChatgptAnnotator(Filter):
             self.topic_regex = None
             logger.debug("No topic pattern specified, will process all topics")
 
-        # Store other configuration
-        self.model = config.chatgpt_model
-        self.max_tokens = config.max_tokens
-        self.temperature = config.temperature
-        self.max_image_size = config.max_image_size
-        self.image_quality = config.image_quality
-        self.preserve_original_format = config.preserve_original_format
-        self.output_schema = config.output_schema
-        self.confidence_threshold = config.confidence_threshold
+        logger.info("FilterChatTag setup complete.")
 
-        logger.info("FilterChatgptAnnotator setup complete.")
+    @staticmethod
+    def _build_schema(output_schema: Dict[str, Any]) -> Optional[Type]:
+        """
+        Build a Pydantic model from the user-supplied output_schema dict.
+
+        Input shape: ``{"label_name": {"present": False, "confidence": 0.0}, ...}``.
+        Each top-level key becomes a ``LabelAnnotation`` field (``present: bool``,
+        ``confidence: float`` ∈ [0, 1]). Passed to ``with_structured_output`` so
+        every provider returns the same shape.
+        """
+        if not output_schema:
+            return None
+
+        from pydantic import BaseModel, Field, create_model
+
+        class LabelAnnotation(BaseModel):
+            present: bool = Field(description="Whether the label is present in the image")
+            confidence: float = Field(ge=0.0, le=1.0, description="Confidence score from 0.0 to 1.0")
+
+        fields = {
+            label: (
+                LabelAnnotation,
+                Field(description=f"Annotation for label '{label}'"),
+            )
+            for label in output_schema.keys()
+        }
+
+        return create_model("ChatTagAnnotations", **fields)
+
+    @staticmethod
+    def _build_model(config: FilterChatTagConfig, schema: Optional[Type]):
+        """
+        Build the LangChain chat model and wrap it with structured output.
+
+        With a schema, returns a Runnable that yields
+        ``{"raw": AIMessage, "parsed": <pydantic>, "parsing_error": ...}``
+        (via ``include_raw=True``) so usage metadata is preserved alongside
+        the parsed annotations.
+        """
+        try:
+            from langchain.chat_models import init_chat_model
+        except ImportError as e:
+            raise ImportError(
+                "langchain is required. Install with: pip install langchain langchain-openai "
+                "langchain-google-genai langchain-anthropic langchain-ollama"
+            ) from e
+
+        model = init_chat_model(
+            config.chattag_model,
+            max_tokens=config.max_tokens,
+            temperature=config.temperature,
+        )
+
+        if schema is not None:
+            return model.with_structured_output(schema, include_raw=True)
+        return model
 
     def process(self, frames: dict[str, Frame]):
         """
-        Process frames using ChatGPT Vision API.
-        
-        Args:
-            frames: Dictionary with input frames
-            
-        Returns:
-            Processed frames with annotation results in metadata.
+        Process frames through the configured LangChain chat model.
+
+        Returns processed frames with annotation results stored under
+        ``frame.data["meta"]["chattag"]``.
         """
         processed_frames = {}
-        
+
         logger.debug(f"PROCESS CALL: Received {len(frames)} frames with keys: {list(frames.keys())}")
-        
-        # Store total frames processed across all calls for debugging
+
         if not hasattr(self, '_total_frames_processed'):
             self._total_frames_processed = 0
-        
-        # DEBUG: Save frame info to debug file (only if debug_metadata is enabled)
+
         if self.config.debug_metadata:
             debug_dir = Path(self.output_dir) / "debug" if self.save_frames else Path("./debug")
             debug_dir.mkdir(parents=True, exist_ok=True)
-            
+
             debug_file = debug_dir / f"frames_received_{int(time.time())}.txt"
             with open(debug_file, 'w') as f:
                 f.write(f"PROCESS CALL DEBUG - {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
@@ -344,30 +298,25 @@ class FilterChatgptAnnotator(Filter):
                         f.write(f"Frame meta: {frame.data.get('meta', {})}\n")
                     f.write(f"Image shape: {frame.rw_bgr.image.shape if hasattr(frame.rw_bgr, 'image') else 'No image'}\n")
                     f.write("-" * 30 + "\n")
-            
+
             logger.debug(f"DEBUG: Saved frame info to {debug_file}")
-            
-            # DEBUG: Save frame images for visual debugging
+
             debug_images_dir = debug_dir / "images"
             debug_images_dir.mkdir(exist_ok=True)
-            
+
             for frame_id, frame in frames.items():
                 try:
-                    # Save debug image with unique timestamp (microseconds for uniqueness)
-                    debug_timestamp = int(time.time() * 1000000)  # Use microseconds for uniqueness
+                    debug_timestamp = int(time.time() * 1000000)
                     debug_image_path = debug_images_dir / f"debug_{frame_id}_{debug_timestamp}.jpg"
-                    image_rgb = frame.rw_bgr.image[:, :, ::-1]  # BGR to RGB
-                    from PIL import Image
+                    image_rgb = frame.rw_bgr.image[:, :, ::-1]
                     pil_image = Image.fromarray(image_rgb)
                     pil_image.save(debug_image_path, "JPEG", quality=90)
                     logger.debug(f"DEBUG: Saved frame image to {debug_image_path}")
                 except Exception as e:
                     logger.error(f"DEBUG: Failed to save frame image for {frame_id}: {e}")
-        
-        # Process each frame received in this call
+
         for frame_id, frame in frames.items():
             logger.debug(f"STARTING frame processing: {frame_id}")
-            # Check if topic should be excluded
             should_exclude = False
             for pattern in self.exclude_topics:
                 try:
@@ -376,35 +325,28 @@ class FilterChatgptAnnotator(Filter):
                         should_exclude = True
                         break
                 except re.error:
-                    # If pattern is not a valid regex, treat it as an exact match
                     if pattern == frame_id:
                         should_exclude = True
                         break
-            
+
             if should_exclude:
                 logger.info(f"SKIPPING topic {frame_id} as it matches exclude pattern")
                 continue
-            
-            # Skip if topic doesn't match pattern (if pattern is specified)
+
             if self.topic_regex and not self.topic_regex.search(frame_id):
                 logger.info(f"SKIPPING topic {frame_id} due to topic_regex mismatch")
                 continue
-            
-            # Get image from frame
+
             image = frame.rw_bgr.image
-            
-            # Get frame metadata
             frame_meta = frame.data.get('meta', {})
             frame_id_meta = frame_meta.get('id', frame_id)
-            
-            # Process frame with ChatGPT Vision API
+
             start_time = time.time()
             try:
-                logger.debug(f"CALLING API for frame {frame_id_meta}")
-                annotations, usage = self._analyze_image_with_chatgpt(image, frame_id_meta)
+                logger.debug(f"CALLING LLM for frame {frame_id_meta}")
+                annotations, usage = self._analyze_image(image, frame_id_meta)
                 processing_time = time.time() - start_time
-                
-                # Create results dictionary
+
                 results = {
                     "schema_version": CHATTAG_OUTPUT_SCHEMA_VERSION,
                     "annotations": annotations,
@@ -414,14 +356,13 @@ class FilterChatgptAnnotator(Filter):
                     "model": self.model,
                     "frame_id": frame_id_meta
                 }
-                
-                logger.info(f"API SUCCESS for frame {frame_id_meta}: {len(annotations)} annotations, {usage['total_tokens']} tokens, {processing_time:.2f}s")
-                
+
+                logger.info(f"LLM SUCCESS for frame {frame_id_meta}: {len(annotations)} annotations, {usage['total_tokens']} tokens, {processing_time:.2f}s")
+
             except Exception as e:
                 processing_time = time.time() - start_time
-                logger.error(f"API ERROR for frame {frame_id_meta}: {str(e)}")
-                
-                # Create error results
+                logger.error(f"LLM ERROR for frame {frame_id_meta}: {str(e)}")
+
                 results = {
                     "schema_version": CHATTAG_OUTPUT_SCHEMA_VERSION,
                     "annotations": self._get_default_annotations(),
@@ -432,148 +373,131 @@ class FilterChatgptAnnotator(Filter):
                     "frame_id": frame_id_meta,
                     "error": str(e)
                 }
-            
-            # Preserve original frame data and add new results
+
             frame_data = frame.data.copy() if hasattr(frame.data, 'copy') else dict(frame.data)
-            
-            # Ensure meta exists in frame data
+
             if "meta" not in frame_data:
                 frame_data["meta"] = {}
-            
-            # Add ChatGPT results to metadata
-            frame_data["meta"]["chatgpt_annotator"] = results
-            
-            # Create new frame with preserved data and updated metadata
+
+            frame_data["meta"][CHATTAG_META_KEY] = results
+
             updated_frame = Frame(image, frame_data, "BGR")
-            
-            # Add the processed frame to output
+
             processed_frames[frame_id] = updated_frame
             self._total_frames_processed += 1
             logger.info(f"ADDED frame {frame_id} to output (batch: {len(processed_frames)}, total: {self._total_frames_processed})")
-            
-            # Save frame results and image if enabled
+
             if self.save_frames:
-                # Save processed image with unique name
                 image_path = self._save_processed_image(frame_id_meta, frame.image)
-                
-                # Save results in dataset_langchain format
                 self._save_frame_results(frame_id_meta, results, image_path)
-        
-        
-        # Handle forward_main logic
+
+
         if self.forward_main:
             main_found = False
             for frame_id, frame in frames.items():
                 if frame_id == "main":
                     main_frame = Frame(frame.rw_bgr.image, frame.data, "BGR")
                     ordered_frames = {"main": main_frame}
-                    # Add all other frames after main
                     for key, value in processed_frames.items():
-                        if key != "main":  # Avoid duplicating main if it already exists
+                        if key != "main":
                             ordered_frames[key] = value
                     processed_frames = ordered_frames
                     main_found = True
                     break
             if not main_found:
                 logger.warning("No main topic found in frames, skipping forward_main")
-        
+
         logger.debug(f"BATCH COMPLETE: Input frames: {len(frames)}, Output frames: {len(processed_frames)}, Total processed so far: {self._total_frames_processed}")
         return processed_frames
 
-    def _analyze_image_with_chatgpt(self, image, frame_id: str) -> tuple[Dict[str, Any], Dict[str, int]]:
+    def _analyze_image(self, image, frame_id: str) -> tuple[Dict[str, Any], Dict[str, int]]:
         """
-        Analyze image using ChatGPT Vision API.
-        
-        Args:
-            image: OpenCV image (BGR format)
-            frame_id: Frame identifier for logging
-            
-        Returns:
-            Tuple of (annotations_dict, usage_dict)
+        Analyze an image with the configured LangChain chat model.
+
+        Returns ``(annotations_dict, usage_dict)``. Annotations are always
+        normalized through ``_validate_annotations`` so downstream consumers
+        see the same shape regardless of provider.
         """
-        # Check if no-ops mode is enabled
         if self.no_ops:
-            logger.info(f"NO-OPS: Skipping API call for frame {frame_id}")
+            logger.info(f"NO-OPS: Skipping LLM call for frame {frame_id}")
             return self._get_default_annotations(), {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
-        # Convert OpenCV BGR image to PIL RGB
-        image_rgb = image[:, :, ::-1]  # BGR to RGB
+
+        image_rgb = image[:, :, ::-1]
         pil_image = Image.fromarray(image_rgb)
-        
-        # Resize image to optimize API costs (only if max_image_size > 0)
-        # For better annotation precision, use higher quality resizing
+
         if self.max_image_size > 0:
-            # Use LANCZOS resampling for better quality when downscaling
             pil_image.thumbnail((self.max_image_size, self.max_image_size), Image.Resampling.LANCZOS)
             logger.debug(f"Resized image to max {self.max_image_size}px for frame {frame_id}")
         else:
             logger.debug(f"Keeping original image size for frame {frame_id}")
-        
-        # Convert to base64 with optimized settings for better quality
+
         buffer = io.BytesIO()
-        # Use higher quality for better annotation precision
-        quality = max(self.image_quality, 90)  # Ensure minimum quality of 90
+        quality = max(self.image_quality, 90)
         pil_image.save(buffer, format="JPEG", quality=quality, optimize=True, subsampling=0)
         image_b64 = base64.b64encode(buffer.getvalue()).decode()
-        
-        # Call ChatGPT Vision API
-        logger.debug(f"Making API request for frame {frame_id}")
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": self.prompt_text},
-                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}}
-                    ]
-                }
-            ],
-            max_tokens=self.max_tokens,
-            temperature=self.temperature
+
+        from langchain_core.messages import HumanMessage
+
+        message = HumanMessage(
+            content=[
+                {"type": "text", "text": self.prompt_text},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
+            ]
         )
-        logger.debug(f"API response received for frame {frame_id}")
-        
-        # Extract response content
-        raw_response = response.choices[0].message.content
-        usage = {
-            "input_tokens": response.usage.prompt_tokens,
-            "output_tokens": response.usage.completion_tokens,
-            "total_tokens": response.usage.total_tokens
-        }
-        
-        # Parse JSON response
-        try:
-            annotations = json.loads(raw_response)
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response for frame {frame_id}: {str(e)}")
-            logger.error(f"Raw response: {raw_response}")
-            annotations = self._get_default_annotations()
-        
-        # Validate and normalize annotations
-        annotations = self._validate_annotations(annotations)
-        
-        # Perform quality checks on annotations
-        self._perform_annotation_quality_checks(annotations, frame_id)
-        
+
+        logger.debug(f"Invoking LLM for frame {frame_id}")
+        response = self._chain.invoke([message])
+        logger.debug(f"LLM response received for frame {frame_id}")
+
+        if self._pydantic_schema is not None:
+            parsed = response.get("parsed")
+            raw = response.get("raw")
+            parsing_error = response.get("parsing_error")
+
+            if parsing_error is not None or parsed is None:
+                logger.error(f"Structured output parse failed for frame {frame_id}: {parsing_error}")
+                annotations = self._get_default_annotations()
+            else:
+                annotations = {
+                    label: {"present": bool(ann["present"]), "confidence": float(ann["confidence"])}
+                    for label, ann in parsed.model_dump().items()
+                }
+                annotations = self._validate_annotations(annotations)
+                self._perform_annotation_quality_checks(annotations, frame_id)
+
+            usage_md = getattr(raw, "usage_metadata", None) or {}
+            usage = {
+                "input_tokens": int(usage_md.get("input_tokens", 0)),
+                "output_tokens": int(usage_md.get("output_tokens", 0)),
+                "total_tokens": int(usage_md.get("total_tokens", 0)),
+            }
+        else:
+            raw_text = response.content if hasattr(response, "content") else str(response)
+            try:
+                annotations = json.loads(raw_text)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response for frame {frame_id}: {str(e)}")
+                logger.error(f"Raw response: {raw_text}")
+                annotations = self._get_default_annotations()
+            annotations = self._validate_annotations(annotations)
+            self._perform_annotation_quality_checks(annotations, frame_id)
+
+            usage_md = getattr(response, "usage_metadata", None) or {}
+            usage = {
+                "input_tokens": int(usage_md.get("input_tokens", 0)),
+                "output_tokens": int(usage_md.get("output_tokens", 0)),
+                "total_tokens": int(usage_md.get("total_tokens", 0)),
+            }
+
         return annotations, usage
 
     def _validate_annotations(self, annotations: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Validate and normalize annotation format.
-        
-        Args:
-            annotations: Raw annotations from ChatGPT
-            
-        Returns:
-            Validated annotations in standard format
-        """
+        """Normalize annotations to the canonical {present, confidence} shape."""
         validated = {}
-        
-        # If output_schema is provided, use it as template
+
         if self.output_schema:
             for key, default_value in self.output_schema.items():
                 if key in annotations:
-                    # Validate the annotation format
                     if isinstance(annotations[key], dict) and "present" in annotations[key] and "confidence" in annotations[key]:
                         validated[key] = {
                             "present": bool(annotations[key]["present"]),
@@ -589,7 +513,6 @@ class FilterChatgptAnnotator(Filter):
                 else:
                     validated[key] = self._default_for_schema_key(default_value)
         else:
-            # No schema provided, try to normalize existing annotations
             for key, value in annotations.items():
                 if isinstance(value, dict) and "present" in value and "confidence" in value:
                     validated[key] = {
@@ -602,17 +525,16 @@ class FilterChatgptAnnotator(Filter):
                         "confidence": 1.0 if value else 0.0
                     }
                 else:
-                    # Convert to boolean with default confidence
                     validated[key] = {
                         "present": bool(value),
                         "confidence": 0.5
                     }
-        
+
         return validated
 
     @staticmethod
     def _default_for_schema_key(default_value: Any) -> Dict[str, Any]:
-        """Normalize output_schema entry to classification-only default."""
+        """Normalize an output_schema entry to a classification-only default."""
         if isinstance(default_value, dict):
             return {
                 "present": bool(default_value.get("present", False)),
@@ -621,20 +543,13 @@ class FilterChatgptAnnotator(Filter):
         return {"present": False, "confidence": 0.0}
 
     def _perform_annotation_quality_checks(self, annotations: Dict[str, Any], frame_id: str):
-        """
-        Perform quality checks on annotations and log warnings for potential issues.
-        
-        Args:
-            annotations: Validated annotations dictionary
-            frame_id: Frame identifier for logging
-        """
         try:
             quality_issues = []
-            
+
             for label, data in annotations.items():
                 if not isinstance(data, dict):
                     continue
-                
+
                 present = data.get('present', False)
                 confidence = data.get('confidence', 0.0)
 
@@ -643,25 +558,18 @@ class FilterChatgptAnnotator(Filter):
 
                 if not present and confidence > 0.7:
                     quality_issues.append(f"{label}: Not present but high confidence ({confidence:.2f})")
-            
-            # Log quality issues
+
             if quality_issues:
                 logger.warning(f"Quality issues detected for frame {frame_id}:")
                 for issue in quality_issues:
                     logger.warning(f"  - {issue}")
             else:
                 logger.debug(f"No quality issues detected for frame {frame_id}")
-                
+
         except Exception as e:
             logger.error(f"Error performing quality checks for frame {frame_id}: {e}")
 
     def _get_default_annotations(self) -> Dict[str, Any]:
-        """
-        Get default annotations when processing fails.
-        
-        Returns:
-            Default annotations dictionary
-        """
         if self.output_schema:
             return {
                 k: self._default_for_schema_key(v)
@@ -670,16 +578,8 @@ class FilterChatgptAnnotator(Filter):
         return {}
 
     def _save_frame_results(self, frame_id: str, results: Dict[str, Any], image_path: str = None):
-        """
-        Save frame results to JSON file in dataset_langchain format.
-        
-        Args:
-            frame_id: Frame identifier
-            results: Processing results
-            image_path: Path to the processed image (if save_frames=True)
-        """
+        """Save frame results to JSONL in dataset_langchain format."""
         try:
-            # Create dataset_langchain format
             dataset_entry = {
                 "schema_version": results["schema_version"],
                 "image": image_path or f"{frame_id}.jpg",
@@ -687,147 +587,108 @@ class FilterChatgptAnnotator(Filter):
                 "usage": results.get("usage", {}),
                 "prompt_used": self.prompt_filename
             }
-            
-            # Save as JSONL (one line per entry)
+
             output_file = self.output_dir / "labels.jsonl"
             with open(output_file, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(dataset_entry, ensure_ascii=False) + '\n')
-            
+
             logger.debug(f"Saved frame results to: {output_file}")
         except Exception as e:
             logger.error(f"Failed to save frame results for {frame_id}: {str(e)}")
-    
+
     def _save_processed_image(self, frame_id: str, image):
-        """
-        Save processed image with unique name in data subfolder.
-        Preserves original image quality by using high-quality settings.
-        
-        Args:
-            frame_id: Frame identifier
-            image: OpenCV image (BGR format)
-            
-        Returns:
-            str: Path to saved image
-        """
         try:
-            # Convert OpenCV BGR to RGB
             image_rgb = image[:, :, ::-1]
             pil_image = Image.fromarray(image_rgb)
-            
-            # Create data subfolder
+
             data_dir = self.output_dir / "data"
             data_dir.mkdir(parents=True, exist_ok=True)
-            
-            # Create unique filename
-            timestamp = int(time.time() * 1000)  # milliseconds
-            
-            # Determine best format and extension
+
+            timestamp = int(time.time() * 1000)
+
             if self.preserve_original_format and pil_image.mode in ('RGB', 'RGBA'):
-                # Try to preserve original format - use PNG for lossless quality
                 filename = f"{frame_id}_{timestamp}.png"
                 image_path = data_dir / filename
-                
-                # Save as PNG for lossless quality
                 pil_image.save(image_path, "PNG", optimize=False)
                 logger.debug(f"Saved processed image to: {image_path} as PNG (lossless)")
             else:
-                # Fallback to high-quality JPEG
                 filename = f"{frame_id}_{timestamp}.jpg"
                 image_path = data_dir / filename
-                
-                # Save image with high quality settings to preserve original quality
-                # Use quality >= 95 and disable optimization to prevent quality loss
                 pil_image.save(
-                    image_path, 
-                    "JPEG", 
-                    quality=max(self.image_quality, 95),  # Ensure minimum quality of 95
-                    optimize=False,  # Disable optimization to preserve quality
-                    subsampling=0,   # Disable chroma subsampling for better quality
-                    progressive=False  # Disable progressive encoding for better compatibility
+                    image_path,
+                    "JPEG",
+                    quality=max(self.image_quality, 95),
+                    optimize=False,
+                    subsampling=0,
+                    progressive=False
                 )
                 logger.debug(f"Saved processed image to: {image_path} as JPEG with quality {max(self.image_quality, 95)}")
-            
+
             return str(image_path)
         except Exception as e:
             logger.error(f"Failed to save processed image for {frame_id}: {str(e)}")
             return None
 
     def _generate_binary_datasets(self):
-        """
-        Generate binary datasets from saved JSONL file in dataset_langchain format.
-        Creates separate datasets for each label/item.
-        This method overwrites existing binary dataset files.
-        """
+        """Generate binary datasets from saved JSONL in dataset_langchain format."""
         try:
             logger.info("Generating binary datasets from saved JSONL file...")
-            
-            # Read JSONL file
+
             jsonl_file = self.output_dir / "labels.jsonl"
             if not jsonl_file.exists():
                 logger.warning("No labels.jsonl file found in output directory")
                 return
-            
-            # Read all records from JSONL
+
             records = []
             with open(jsonl_file, 'r', encoding='utf-8') as f:
                 for line in f:
                     if line.strip():
                         records.append(json.loads(line.strip()))
-            
+
             if not records:
                 logger.warning("No records found in JSONL file")
                 return
-            
-            # Get labels from first record
+
             labels = set()
             for record in records:
                 labels.update(record["labels"].keys())
-            
+
             if not labels:
                 logger.warning("No labels found in records")
                 return
-            
-            # Create binary datasets directory
+
             binary_datasets_dir = self.output_dir / "binary_datasets"
             binary_datasets_dir.mkdir(exist_ok=True)
-            
-            # Generate binary dataset for each label
+
             for label_name in labels:
                 dataset = {"annotations": []}
-                
+
                 for record in records:
                     if label_name in record["labels"]:
-                        # Convert present/confidence to binary label
                         present = record["labels"][label_name].get('present', False)
                         confidence = record["labels"][label_name].get('confidence', 0.0)
-                        
-                        # Use confidence threshold for binary classification
-                        # Class positive: label name, Class negative: "absent"
+
                         binary_label = label_name if present and confidence >= self.confidence_threshold else "absent"
-                        
-                        # Extract filename from image path
+
                         image_path = record["image"]
                         filename = os.path.basename(image_path)
-                            
+
                         annotation = {
                             "filename": filename,
                             "label": binary_label
                         }
                         dataset["annotations"].append(annotation)
-                
-                # Save binary dataset directly in binary_datasets folder (overwrites existing)
+
                 dataset_file = binary_datasets_dir / f"{label_name}_labels.json"
-                
+
                 with open(dataset_file, 'w', encoding='utf-8') as f:
                     json.dump(dataset, f, indent=2, ensure_ascii=False)
-                
-                # Count samples
+
                 positive_count = sum(1 for ann in dataset["annotations"] if ann["label"] == label_name)
                 negative_count = sum(1 for ann in dataset["annotations"] if ann["label"] == "absent")
-                
+
                 logger.info(f"Generated {label_name} dataset: {positive_count} {label_name}, {negative_count} absent samples (overwrote existing file)")
-            
-            # Generate summary report
+
             summary = {
                 "total_datasets": len(labels),
                 "labels": sorted(list(labels)),
@@ -835,100 +696,77 @@ class FilterChatgptAnnotator(Filter):
                 "output_directory": str(binary_datasets_dir),
                 "generated_at": time.time()
             }
-            
+
             summary_file = binary_datasets_dir / "_summary_report.json"
             with open(summary_file, 'w', encoding='utf-8') as f:
                 json.dump(summary, f, indent=2, ensure_ascii=False)
-            
+
             logger.info(f"Binary datasets generated successfully in: {binary_datasets_dir}")
             logger.info(f"Summary report saved to: {summary_file}")
-            
-            # Always generate balanced datasets
+
             self._generate_balanced_datasets(records, labels, binary_datasets_dir)
-            
+
         except Exception as e:
             logger.error(f"Failed to generate binary datasets: {str(e)}")
 
     def _generate_balanced_datasets(self, records, labels, binary_datasets_dir):
-        """
-        Generate balanced binary datasets where each class has equal representation.
-        Creates a new directory 'binary_datasets_balanced' with balanced datasets.
-        Works for any type of binary classification problem across any domain.
-        
-        Args:
-            records: List of records from JSONL file
-            labels: Set of all labels/classes found in the data
-            binary_datasets_dir: Path to the original binary datasets directory
-        """
+        """Generate balanced binary datasets where each class has equal representation."""
         try:
             logger.info("Generating balanced binary datasets...")
-            
-            # Create balanced datasets directory
+
             balanced_datasets_dir = binary_datasets_dir.parent / "binary_datasets_balanced"
             balanced_datasets_dir.mkdir(exist_ok=True)
-            
-            # Generate balanced dataset for each label/class
+
             for label in labels:
-                # Collect all annotations for this label
                 positive_samples = []
                 negative_samples = []
-                
+
                 for record in records:
                     if label in record["labels"]:
                         present = record["labels"][label].get('present', False)
                         confidence = record["labels"][label].get('confidence', 0.0)
-                        
-                        # Extract filename from image path
+
                         image_path = record["image"]
                         filename = os.path.basename(image_path)
-                        
-                        # Use confidence threshold for binary classification
+
                         if present and confidence >= self.confidence_threshold:
                             positive_samples.append(filename)
                         else:
                             negative_samples.append(filename)
-                
-                # Balance the dataset (use the smaller class size)
+
                 min_samples = min(len(positive_samples), len(negative_samples))
-                
+
                 if min_samples == 0:
                     logger.warning(f"No samples found for {label}, skipping balanced dataset")
                     continue
-                
-                # Sample equal amounts from both classes
+
                 import random
                 balanced_positive = random.sample(positive_samples, min_samples) if len(positive_samples) >= min_samples else positive_samples
                 balanced_negative = random.sample(negative_samples, min_samples) if len(negative_samples) >= min_samples else negative_samples
-                
-                # Create balanced dataset
+
                 balanced_dataset = {"annotations": []}
-                
-                # Add positive samples
+
                 for filename in balanced_positive:
                     balanced_dataset["annotations"].append({
                         "filename": filename,
                         "label": label
                     })
-                
-                # Add negative samples
+
                 for filename in balanced_negative:
                     balanced_dataset["annotations"].append({
                         "filename": filename,
                         "label": "absent"
                     })
-                
-                # Shuffle the dataset
+
                 random.shuffle(balanced_dataset["annotations"])
-                
-                # Save balanced dataset
+
                 balanced_dataset_file = balanced_datasets_dir / f"{label}_labels.json"
-                
+
                 with open(balanced_dataset_file, 'w', encoding='utf-8') as f:
                     json.dump(balanced_dataset, f, indent=2, ensure_ascii=False)
-                
+
                 logger.info(f"Generated balanced {label} dataset: {len(balanced_positive)} {label}, {len(balanced_negative)} absent samples")
-            
-            # Generate balanced summary report
+
             balanced_summary = {
                 "total_datasets": len(labels),
                 "labels": sorted(list(labels)),
@@ -945,21 +783,21 @@ class FilterChatgptAnnotator(Filter):
                 },
                 "generated_at": time.time()
             }
-            
+
             balanced_summary_file = balanced_datasets_dir / "_summary_report.json"
             with open(balanced_summary_file, 'w', encoding='utf-8') as f:
                 json.dump(balanced_summary, f, indent=2, ensure_ascii=False)
-            
+
             logger.info(f"Balanced datasets generated successfully in: {balanced_datasets_dir}")
             logger.info(f"Balanced summary report saved to: {balanced_summary_file}")
-            
+
         except Exception as e:
             logger.error(f"Failed to generate balanced datasets: {str(e)}")
 
     def _generate_multilabel_coco_datasets(self):
         """
         Build a COCO-style JSON from labels.jsonl for multilabel workflows.
-        Each positive label (per confidence threshold) gets one full-image box in COCO [x,y,w,h].
+        Each positive label (per confidence threshold) gets one full-image box.
         """
         try:
             logger.info("Generating multilabel COCO datasets...")
@@ -992,10 +830,10 @@ class FilterChatgptAnnotator(Filter):
 
             coco_dataset = {
                 "info": {
-                    "description": "ChatGPT Annotator Multilabel Dataset",
+                    "description": "ChatTag Multilabel Dataset",
                     "version": "1.0",
                     "year": 2024,
-                    "contributor": "ChatGPT Annotator Filter",
+                    "contributor": "FilterChatTag",
                     "date_created": time.strftime("%Y-%m-%d %H:%M:%S")
                 },
                 "licenses": [{"id": 1, "name": "Unknown", "url": ""}],
@@ -1102,23 +940,17 @@ class FilterChatgptAnnotator(Filter):
             logger.error(f"Failed to generate multilabel COCO datasets: {str(e)}")
 
     def shutdown(self):
-        """
-        Called once when the filter is shutting down.
-        """
-        logger.info("========= Shutting down FilterChatgptAnnotator =========")
-        
-        # Generate datasets if save_frames is enabled and output_dir exists
-        # This should happen regardless of no_ops mode
+        logger.info("========= Shutting down FilterChatTag =========")
+
         if self.save_frames and self.output_dir and self.output_dir.exists():
             self._generate_binary_datasets()
             if self.output_schema and len(self.output_schema) > 1:
                 logger.info("Multiple classes detected — generating multilabel COCO export...")
                 self._generate_multilabel_coco_datasets()
-        
-        # Clean up resources
-        self.client = None
-        logger.info("FilterChatgptAnnotator shutdown complete.")
-    
+
+        self._chain = None
+        logger.info("FilterChatTag shutdown complete.")
+
 
 if __name__ == '__main__':
-    FilterChatgptAnnotator.run()
+    FilterChatTag.run()

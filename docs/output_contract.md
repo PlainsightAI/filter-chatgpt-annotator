@@ -1,8 +1,10 @@
 # ChatTag output contract (OpenFilter)
 
-Versioned payloads produced by `FilterChatgptAnnotator` for streaming frames and for saved JSONL. Downstream filters should read `schema_version` and **ignore unknown fields** (top-level or nested) unless they opt in to a documented extension.
+Versioned payloads produced by `FilterChatTag` for streaming frames and for saved JSONL. Downstream filters should read `schema_version` and **ignore unknown fields** (top-level or nested) unless they opt in to a documented extension.
 
 The JSON Schema under `schemas/` lists required keys and known shapes; it **does not** forbid extra properties, so a validator must not reject payloads merely for carrying additional keys (forward compatibility within the same `schema_version` string).
+
+The shape below is identical regardless of which LangChain-backed provider produced the annotations (OpenAI, Gemini, Claude, Ollama). LangChain's `with_structured_output(Pydantic)` enforces the schema on every provider.
 
 ## `schema_version`
 
@@ -10,18 +12,18 @@ The JSON Schema under `schemas/` lists required keys and known shapes; it **does
 |---------|----------------------------------------------|
 | `"1.0"` | Current contract (classification labels only) |
 
-## Stream: `frame.data["meta"]["chatgpt_annotator"]`
+## Stream: `frame.data["meta"]["chattag"]`
 
 | Field              | Type    | Required | Description |
 |--------------------|---------|----------|-------------|
 | `schema_version`   | string  | yes      | Contract version, e.g. `"1.0"`. |
 | `annotations`      | object  | yes      | Map of label name → per-label record (see below). |
-| `usage`            | object  | yes      | `input_tokens`, `output_tokens`, `total_tokens` (integers). |
-| `processing_time`  | number  | yes      | Seconds spent on the API call for this frame. |
+| `usage`            | object  | yes      | `input_tokens`, `output_tokens`, `total_tokens` (integers). Populated from `AIMessage.usage_metadata`; may be all zero when the provider does not report token usage (some Ollama models). |
+| `processing_time`  | number  | yes      | Seconds spent on the LLM call for this frame. |
 | `timestamp`        | number  | yes      | Unix time when processing finished. |
-| `model`            | string  | yes      | Model id used for the request. |
+| `model`            | string  | yes      | LangChain model string used for the request (e.g. `openai:gpt-4o-mini`). |
 | `frame_id`         | string  | yes      | Frame identifier from input meta or topic. |
-| `error`            | string  | no       | Present when the API call or parsing failed. |
+| `error`            | string  | no       | Present when the LLM call or structured-output parse failed. |
 
 ### Per-label record (`annotations[label]`)
 
@@ -54,7 +56,7 @@ The JSON Schema under `schemas/` lists required keys and known shapes; it **does
   "usage": { "input_tokens": 1000, "output_tokens": 50, "total_tokens": 1050 },
   "processing_time": 1.2,
   "timestamp": 1710000000.0,
-  "model": "gpt-4o-mini",
+  "model": "openai:gpt-4o-mini",
   "frame_id": "0"
 }
 ```

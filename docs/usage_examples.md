@@ -20,14 +20,14 @@ from dotenv import load_dotenv
 from openfilter.filter_runtime.filter import Filter
 from openfilter.filter_runtime.filters.video_in import VideoIn
 from openfilter.filter_runtime.filters.webvis import Webvis
-from filter_chatgpt_annotator.filter import FilterChatgptAnnotator, FilterChatgptAnnotatorConfig
+from filter_chattag.filter import FilterChatTag, FilterChatTagConfig
 
 # Load environment variables
 load_dotenv()
 
 # Configuration
 video_path = os.getenv('VIDEO_PATH', '/path/to/salad_video.mp4')
-api_key = os.getenv('FILTER_CHATGPT_API_KEY')
+chattag_model = os.getenv('FILTER_CHATTAG_MODEL', 'openai:gpt-4o-mini')  # OPENAI_API_KEY (or GOOGLE_API_KEY etc.) is read natively by LangChain
 prompt_path = './prompts/simple_salad_prompt.txt'
 
 # Run the pipeline
@@ -36,11 +36,11 @@ Filter.run_multi([
         sources=f"file://{video_path}!resize=960x540!sync!no-loop;main",
         outputs="tcp://*:5550"
     )),
-    (FilterChatgptAnnotator, FilterChatgptAnnotatorConfig(
+    (FilterChatTag, FilterChatTagConfig(
         id="food_annotation",
         sources="tcp://localhost:5550",
         outputs="tcp://*:5552",
-        chatgpt_api_key=api_key,
+        chattag_model=chattag_model,
         prompt=prompt_path,
         output_schema={
             "avocado": {"present": False, "confidence": 0.0},
@@ -67,14 +67,14 @@ from dotenv import load_dotenv
 from openfilter.filter_runtime.filter import Filter
 from openfilter.filter_runtime.filters.image_in import ImageIn
 from openfilter.filter_runtime.filters.webvis import Webvis
-from filter_chatgpt_annotator.filter import FilterChatgptAnnotator, FilterChatgptAnnotatorConfig
+from filter_chattag.filter import FilterChatTag, FilterChatTagConfig
 
 # Load environment variables
 load_dotenv()
 
 # Configuration
 image_path = os.getenv('IMAGE_PATH', '/path/to/pet_images')
-api_key = os.getenv('FILTER_CHATGPT_API_KEY')
+chattag_model = os.getenv('FILTER_CHATTAG_MODEL', 'openai:gpt-4o-mini')  # OPENAI_API_KEY (or GOOGLE_API_KEY etc.) is read natively by LangChain
 prompt_path = './prompts/pet_classification_prompt.txt'
 
 # Run the pipeline
@@ -84,11 +84,11 @@ Filter.run_multi([
         outputs="tcp://*:5550",
         poll_interval=0
     )),
-    (FilterChatgptAnnotator, FilterChatgptAnnotatorConfig(
+    (FilterChatTag, FilterChatTagConfig(
         id="pet_classification",
         sources="tcp://localhost:5550",
         outputs="tcp://*:5552",
-        chatgpt_api_key=api_key,
+        chattag_model=chattag_model,
         prompt=prompt_path,
         output_schema={
             "dog": {"present": False, "confidence": 0.0},
@@ -114,14 +114,14 @@ import os
 from dotenv import load_dotenv
 from openfilter.filter_runtime.filter import Filter
 from openfilter.filter_runtime.filters.image_in import ImageIn
-from filter_chatgpt_annotator.filter import FilterChatgptAnnotator, FilterChatgptAnnotatorConfig
+from filter_chattag.filter import FilterChatTag, FilterChatTagConfig
 
 # Load environment variables
 load_dotenv()
 
 # Configuration
 image_path = os.getenv('IMAGE_PATH', '/path/to/medical_images')
-api_key = os.getenv('FILTER_CHATGPT_API_KEY')
+chattag_model = os.getenv('FILTER_CHATTAG_MODEL', 'openai:gpt-4o-mini')  # OPENAI_API_KEY (or GOOGLE_API_KEY etc.) is read natively by LangChain
 prompt_path = './prompts/medical_imaging_prompt.txt'
 
 # Run the pipeline
@@ -131,11 +131,11 @@ Filter.run_multi([
         outputs="tcp://*:5550",
         poll_interval=0
     )),
-    (FilterChatgptAnnotator, FilterChatgptAnnotatorConfig(
+    (FilterChatTag, FilterChatTagConfig(
         id="medical_analysis",
         sources="tcp://localhost:5550",
         outputs="tcp://*:5552",
-        chatgpt_api_key=api_key,
+        chattag_model=chattag_model,
         prompt=prompt_path,
         output_schema={
             "tumor": {"present": False, "confidence": 0.0},
@@ -156,7 +156,7 @@ Filter.run_multi([
 
 ```bash
 # Required
-FILTER_CHATGPT_API_KEY=sk-your-openai-api-key-here
+OPENAI_API_KEY=sk-your-openai-api-key-here
 
 # Input source
 VIDEO_PATH=/path/to/your/video.mp4
@@ -167,7 +167,7 @@ IMAGE_PATH=/path/to/your/images
 FILTER_PROMPT=./prompts/your_prompt.txt
 
 # Model settings
-FILTER_CHATGPT_MODEL=gpt-4o-mini
+FILTER_CHATTAG_MODEL=openai:gpt-4o-mini
 FILTER_MAX_TOKENS=1000
 FILTER_TEMPERATURE=0.1
 
@@ -194,8 +194,8 @@ FILTER_DEBUG_METADATA=false
 
 ```bash
 # API Configuration
-FILTER_CHATGPT_API_KEY=sk-your-openai-api-key-here
-FILTER_CHATGPT_MODEL=gpt-4o
+OPENAI_API_KEY=sk-your-openai-api-key-here
+FILTER_CHATTAG_MODEL=openai:gpt-4o
 FILTER_MAX_TOKENS=2000
 FILTER_TEMPERATURE=0.0
 
@@ -346,7 +346,7 @@ quality_check("./output_frames")
 FILTER_NO_OPS=true
 
 # Or in code
-config = FilterChatgptAnnotatorConfig(
+config = FilterChatTagConfig(
     # ... other config
     no_ops=True
 )
@@ -363,7 +363,7 @@ import os
 os.environ['FILTER_DEBUG_METADATA'] = 'true'
 
 # Method 3: Set directly in config
-config = FilterChatgptAnnotatorConfig(
+config = FilterChatTagConfig(
     # ... other config
     debug_metadata=True
 )

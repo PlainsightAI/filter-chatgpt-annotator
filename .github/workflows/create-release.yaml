@@ -11,7 +11,7 @@ jobs:
   release:
     uses: PlainsightAI/gh-actions-public/.github/workflows/filter-release.yaml@main
     with:
-      docker_image: plainsightai/openfilter-chatgpt-annotator
+      docker_image: plainsightai/openfilter-chattag
       source-paths: |
         filter_*/**
         pyproject.toml

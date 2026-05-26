@@ -1,238 +1,89 @@
-# ChatTag Filter Scripts
+# FilterChatTag Example Scripts
 
-This directory contains example scripts demonstrating how to use the ChatTag with different types of image annotation tasks.
+Example scripts showing how to use `FilterChatTag` (powered by [LangChain](https://python.langchain.com/)) for different image annotation tasks. The same code works with OpenAI, Google Gemini, Anthropic Claude, or Ollama — pick the provider by setting `FILTER_CHATTAG_MODEL`.
 
-## Available Scripts
+## Available scripts
 
-### 1. Simple Salad Classification (`filter_simple_salad.py`)
-Analyzes salad images to detect avocado, lettuce, and tomato with confidence scores.
+| Script | Use case |
+| --- | --- |
+| `filter_food_annotation.py` | Food / salad ingredient detection (video or images) |
+| `filter_multilabel.py` | Multilabel salad ingredient detection (video) with COCO export |
+| `filter_pet_classification.py` | Cat / dog detection (video) |
 
-**Use Case**: Simple salad analysis, basic ingredient detection
-**Prompt**: `./prompts/simple_salad_prompt.txt`
-**Output Schema**: Detects avocado, lettuce, tomato (3 ingredients only)
-**Features**: 
-- Supports both video and image input
-- Automatic input source detection (VideoIn vs ImageIn)
-- Binary classification datasets only
-- Web visualization with Webvis
+All three pipe their input through `FilterChatTag` and visualize results via `Webvis`.
 
-### 2. Food Annotation (`filter_food_annotation.py`)
-Analyzes food images to detect salad ingredients with confidence scores.
+## Prerequisites
 
-**Use Case**: Food analysis, nutrition tracking, ingredient detection
-**Prompt**: `./prompts/food_annotation_prompt.txt`
-**Output Schema**: Detects food ingredients (avocado, lettuce, tomato, etc.)
-**Features**: 
-- Supports both video and image input
-- Automatic input source detection (VideoIn vs ImageIn)
-- No-ops mode enabled by default for testing
-- Web visualization with Webvis
-
-### 3. Pet Classification (`filter_pet_classification.py`)
-Classifies images to detect presence of cats and dogs.
-
-**Use Case**: Pet detection, animal classification, security monitoring
-**Prompt**: `./prompts/pet_classification_prompt.txt`
-**Output Schema**: Detects cats and dogs with confidence scores
-**Features**:
-- Video input processing
-- Optimized for simple classification (lower token limits)
-- Web visualization with Webvis
-
-## Usage
-
-### Prerequisites
-
-1. **Install Dependencies**:
-   ```bash
-   cd /path/to/filter-chatgpt-annotator
-   make install
-   ```
-
-2. **Set up Environment Variables**:
-   ```bash
-   cp env.example .env
-   # Edit .env with your configuration
-   ```
-
-3. **Required Environment Variables**:
-   ```bash
-   FILTER_CHATGPT_API_KEY=your_openai_api_key_here
-   FILTER_PROMPT=./prompts/[prompt_file].txt
-   VIDEO_PATH=/path/to/your/video.mp4
-   ```
-
-### Running Scripts
-
-#### Food Annotation Example (Video):
 ```bash
-# Set up environment for video processing
-export FILTER_CHATGPT_API_KEY="your_api_key"
-export FILTER_PROMPT="./prompts/food_annotation_prompt.txt"
-export VIDEO_PATH="/path/to/food_video.mp4"
-
-# Run the script
-python scripts/filter_food_annotation.py
+cd /path/to/filter-chattag
+make install
+cp env.example .env
+# Edit .env: set FILTER_CHATTAG_MODEL and the matching provider env var
 ```
 
-#### Food Annotation Example (Images):
-```bash
-# Set up environment for image processing
-export FILTER_CHATGPT_API_KEY="your_api_key"
-export FILTER_PROMPT="./prompts/food_annotation_prompt.txt"
-export IMAGE_PATH="/path/to/food_images"  # Directory with multiple images
-export IMAGE_PATTERN="jpg"  # Optional: file pattern (default: jpg)
-export FILTER_RECURSIVE="false"  # Optional: scan subdirectories
+Pick one model string + matching credential:
 
-# Run the script
-python scripts/filter_food_annotation.py
+```bash
+# OpenAI
+FILTER_CHATTAG_MODEL=openai:gpt-4o-mini
+OPENAI_API_KEY=sk-...
+
+# Google Gemini
+FILTER_CHATTAG_MODEL=google_genai:gemini-2.0-flash
+GOOGLE_API_KEY=...
+
+# Anthropic Claude
+FILTER_CHATTAG_MODEL=anthropic:claude-3-5-sonnet-latest
+ANTHROPIC_API_KEY=sk-ant-...
+
+# Ollama (local)
+FILTER_CHATTAG_MODEL=ollama:llava
+OLLAMA_HOST=http://localhost:11434
 ```
 
-#### Pet Classification Example:
-```bash
-# Set up environment
-export FILTER_CHATGPT_API_KEY="your_api_key"
-export FILTER_PROMPT="./prompts/pet_classification_prompt.txt"
-export VIDEO_PATH="/path/to/pet_video.mp4"
+## Running
 
-# Run the script
+```bash
+# Food annotation (video)
+export FILTER_PROMPT=./prompts/food_annotation_prompt.txt
+export VIDEO_PATH=/path/to/food_video.mp4
+python scripts/filter_food_annotation.py
+
+# Food annotation (images)
+export FILTER_PROMPT=./prompts/food_annotation_prompt.txt
+export IMAGE_PATH=/path/to/food_images
+export IMAGE_PATTERN=jpg
+python scripts/filter_food_annotation.py
+
+# Pet classification
+export FILTER_PROMPT=./prompts/pet_classification_prompt.txt
+export VIDEO_PATH=/path/to/pet_video.mp4
 python scripts/filter_pet_classification.py
 ```
 
-#### Industrial Quality Inspection Example:
-```bash
-# Set up environment
-export FILTER_CHATGPT_API_KEY="your_api_key"
-export FILTER_PROMPT="./prompts/industrial_quality_prompt.txt"
-export VIDEO_PATH="/path/to/industrial_video.mp4"
-export FILTER_SAVE_FRAMES="true"
-export FILTER_OUTPUT_DIR="./quality_results"
-
-# Run the script
-python scripts/filter_industrial_quality.py
-```
-
-## Configuration Options
-
-### Environment Variables
+## Common configuration
 
 | Variable | Default | Description |
-|----------|---------|-------------|
-| `FILTER_CHATGPT_API_KEY` | Required | OpenAI API key |
-| `FILTER_PROMPT` | Required | Path to prompt file |
-| `VIDEO_PATH` | Optional | Path to video file (for video processing) |
-| `IMAGE_PATH` | Optional | Path to image file or directory (for image processing) |
-| `IMAGE_PATTERN` | `jpg` | File pattern for image filtering (e.g., jpg, png, *) |
+|---|---|---|
+| `FILTER_CHATTAG_MODEL` | `openai:gpt-4o-mini` | LangChain model string (`provider:model`) |
+| `FILTER_PROMPT` | required | Path to prompt file |
+| `VIDEO_PATH` | optional | Path to video file (for video processing) |
+| `IMAGE_PATH` | optional | Path to image file or directory |
+| `IMAGE_PATTERN` | `jpg` | File pattern for image filtering |
 | `FILTER_RECURSIVE` | `false` | Scan subdirectories recursively |
-| `FILTER_CHATGPT_MODEL` | `gpt-4o-mini` | ChatGPT model to use |
 | `FILTER_MAX_TOKENS` | `1000` | Maximum response tokens |
-| `FILTER_TEMPERATURE` | `0.1` | Response randomness (0-2) |
-| `FILTER_MAX_IMAGE_SIZE` | `0` | Max image size for processing (0 = keep original) |
-| `FILTER_IMAGE_QUALITY` | `85` | JPEG quality (1-100) |
-| `FILTER_SAVE_FRAMES` | `true` | Save JSON results per frame |
-| `FILTER_OUTPUT_DIR` | `./output_frames` | Directory for saved results |
-| `FILTER_NO_OPS` | `false` | Skip API calls for testing (use default annotations) |
+| `FILTER_TEMPERATURE` | `0.1` | Response randomness (0–2) |
+| `FILTER_MAX_IMAGE_SIZE` | `0` | Max image side in px (0 = original) |
+| `FILTER_IMAGE_QUALITY` | `85` | JPEG quality (1–100) |
+| `FILTER_SAVE_FRAMES` | `true` | Persist per-frame JSON results |
+| `FILTER_OUTPUT_DIR` | `./output_frames` | Where to save results |
+| `FILTER_NO_OPS` | `false` | Skip LLM calls (testing) |
 
-### Input Source Configuration
+## Output format
 
-The filter supports two types of input sources:
+See [`docs/output_contract.md`](../docs/output_contract.md) for the `meta.chattag` stream payload and the `labels.jsonl` line schema. Output structure is identical across providers — LangChain's `with_structured_output` enforces the Pydantic schema generated from `FILTER_OUTPUT_SCHEMA`.
 
-#### 1. Video Processing
-```bash
-export VIDEO_PATH="/path/to/video.mp4"
-# Uses VideoIn filter for video frame extraction
-```
-
-#### 2. Image Processing
-```bash
-export IMAGE_PATH="/path/to/images"  # Directory with multiple images
-export IMAGE_PATTERN="jpg"           # Optional: file pattern
-export FILTER_RECURSIVE="false"      # Optional: scan subdirectories
-# Uses ImageIn filter for image processing
-```
-
-**Image Processing Features:**
-- **Single Image**: `IMAGE_PATH="/path/to/image.jpg"`
-- **Directory**: `IMAGE_PATH="/path/to/images/"` (processes all images in directory)
-- **Pattern Filtering**: `IMAGE_PATTERN="jpg"` (only process .jpg files)
-- **Recursive Scanning**: `FILTER_RECURSIVE="true"` (scan subdirectories)
-- **Looping**: Automatically loops through all images
-- **Dynamic Monitoring**: Detects new images added to directory
-- **FPS Control**: Processes images at controlled rate (2 FPS by default)
-
-### Output Format
-
-All scripts produce standardized JSON output with the following structure:
-
-See [docs/output_contract.md](../docs/output_contract.md) for `meta.chatgpt_annotator` and `labels.jsonl` (includes `schema_version`).
-
-## Real-World Usage Examples
-
-### Example 1: Batch Processing Food Images
-```bash
-# Process all images in a directory
-export FILTER_CHATGPT_API_KEY="your_api_key"
-export FILTER_PROMPT="./prompts/food_annotation_prompt.txt"
-export IMAGE_PATH="/path/to/salad_images"
-export IMAGE_PATTERN="jpg"
-export FILTER_SAVE_FRAMES="true"
-export FILTER_OUTPUT_DIR="./food_analysis_results"
-
-python scripts/filter_food_annotation.py
-```
-
-### Example 2: Monitoring Upload Directory
-```bash
-# Monitor a directory for new images
-export FILTER_CHATGPT_API_KEY="your_api_key"
-export FILTER_PROMPT="./prompts/pet_classification_prompt.txt"
-export IMAGE_PATH="/path/to/upload_folder"
-export IMAGE_PATTERN="*"  # All file types
-export FILTER_RECURSIVE="true"  # Scan subdirectories
-export FILTER_SAVE_FRAMES="true"
-
-python scripts/filter_pet_classification.py
-```
-
-### Example 3: Quality Inspection with Different File Types
-```bash
-# Process mixed file types for quality inspection
-export FILTER_CHATGPT_API_KEY="your_api_key"
-export FILTER_PROMPT="./prompts/industrial_quality_prompt.txt"
-export IMAGE_PATH="/path/to/product_images"
-export IMAGE_PATTERN="*.{jpg,png}"  # Multiple file types
-export FILTER_MAX_IMAGE_SIZE="1024"  # Higher resolution for quality inspection
-export FILTER_SAVE_FRAMES="true"
-
-python scripts/filter_industrial_quality.py
-```
-
-### Example 4: Single Image Processing
-```bash
-# Process a single image file
-export FILTER_CHATGPT_API_KEY="your_api_key"
-export FILTER_PROMPT="./prompts/food_annotation_prompt.txt"
-export IMAGE_PATH="/path/to/single_image.jpg"
-export FILTER_SAVE_FRAMES="true"
-
-python scripts/filter_food_annotation.py
-```
-
-## Customization
-
-### Creating Custom Prompts
-
-1. Create a new prompt file in `./prompts/`:
-   ```bash
-   cp prompts/food_annotation_prompt.txt prompts/my_custom_prompt.txt
-   ```
-
-2. Edit the prompt to match your use case
-3. Create a custom script or modify existing ones
-
-### Custom Output Schemas
-
-You can define custom output schemas in your scripts:
+## Custom output schemas
 
 ```python
 output_schema={
@@ -241,49 +92,8 @@ output_schema={
 }
 ```
 
-## Troubleshooting
+## Tips
 
-### Common Issues
-
-1. **API Key Error**: Ensure `FILTER_CHATGPT_API_KEY` is set correctly
-2. **Prompt File Not Found**: Check that `FILTER_PROMPT` points to an existing file
-3. **Video File Not Found**: Verify `VIDEO_PATH` points to a valid video file
-4. **JSON Parse Error**: Check that your prompt returns valid JSON format
-
-### Performance Tips
-
-1. **Image Size**: Use `FILTER_MAX_IMAGE_SIZE=256` for faster processing
-2. **Token Limits**: Reduce `FILTER_MAX_TOKENS` for simpler tasks
-3. **Frame Saving**: Set `FILTER_SAVE_FRAMES=false` to reduce I/O overhead
-
-### VideoIn Configuration
-
-For reliable video processing, especially with API calls that take time, use the `!sync` option:
-
-```python
-# Correct VideoIn configuration for reliable processing
-sources=f'file://{video_path}!resize=960x540!sync!no-loop;main'
-```
-
-**Key options:**
-- `!sync`: Forces VideoIn to wait for each frame to be processed before sending the next
-- `!no-loop`: Processes video once without looping
-- `;main`: Specifies the topic name for frames
-
-**Why `!sync` is important:**
-- Without `!sync`: VideoIn may send frames faster than they can be processed, causing frame loss
-- With `!sync`: Ensures all frames are processed, even with slow API calls
-- Essential for ChatGPT API processing where each frame takes several seconds
-
-### Cost Optimization
-
-1. **Model Selection**: Use `gpt-4o-mini` for cost-effective processing
-2. **Image Quality**: Lower `FILTER_IMAGE_QUALITY` to reduce token usage
-3. **Batch Processing**: Process multiple frames in batches when possible
-
-## Support
-
-For issues and questions:
-- Check the main README.md for general usage
-- Review the filter implementation in `filter_chatgpt_annotator/filter.py`
-- Test with the provided example prompts and scripts
+- For video, always use `!sync` to make sure VideoIn waits for each frame to be processed before sending the next. LLM calls are slow.
+- Use `gpt-4o-mini` / `gemini-2.0-flash` / `claude-3-5-haiku-latest` for cost-effective batches; switch to a larger model only when quality demands it.
+- Set `FILTER_NO_OPS=true` to wire up the pipeline without paying for any LLM calls.
