@@ -28,8 +28,8 @@ RUN --mount=type=bind,source=VERSION,target=/tmp/VERSION,ro \
     [ -n "$PKG_VERSION" ] || { echo "VERSION file is empty"; exit 1; }; \
     pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir \
-      --index-url https://python.openfilter.io/simple \
-      --extra-index-url https://pypi.org/simple \
+      --index-url https://pypi.org/simple \
+      --extra-index-url https://python.openfilter.io/simple \
       "filter-chatgpt-annotator==${PKG_VERSION}"
 
 # create a writable logs dir and hand over /app to appuser
