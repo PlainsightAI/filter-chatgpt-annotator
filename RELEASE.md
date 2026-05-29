@@ -36,6 +36,7 @@ ChatTag filter release notes
 ### Changed
 
 - Bump openfilter to 1.1.0
+- Dockerfile: prefer PyPI over the openfilter mirror as the primary pip index, so `publish-docker` no longer races against mirror sync immediately after `publish-to-pypi`.
 
 ## v0.2.2 - 2026-04-20
 
