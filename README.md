@@ -8,7 +8,7 @@
 
 `FilterChatTag` is an OpenFilter that sends each video/image frame to a multimodal chat model and attaches structured annotations (`{present, confidence}` per label) to the frame metadata. Built on top of LangChain's `init_chat_model`, so any LangChain-supported chat model with vision can be plugged in.
 
-Part of the PlainSight **Hyperlabel** family of filters.
+Part of the Plainsight **Hyperlabel** family of filters.
 
 > **Breaking change in v0.3.0** — this filter was previously published as `filter-chatgpt-annotator` / `FilterChatgptAnnotator`. See [MIGRATION.md](MIGRATION.md) for the rename map.
 
