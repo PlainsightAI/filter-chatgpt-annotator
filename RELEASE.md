@@ -1,4 +1,9 @@
-# v0.3.1
+# v0.3.2
+
+## v0.3.2 - 2026-07-26
+
+### Changed
+- `README.md`: use the exact HyperLabel™ wording specified by Shanker for the filter family.
 
 ## v0.3.1 - 2026-07-25
 
