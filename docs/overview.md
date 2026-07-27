@@ -6,6 +6,8 @@ sidebar_position: 1
 
 `FilterChatTag` is a LangChain-backed OpenFilter for multimodal vision annotation. It sends each video/image frame to a configurable chat model (OpenAI, Gemini, Claude, Ollama, or any other LangChain-compatible vision model) and attaches structured `{present, confidence}` annotations to the frame metadata.
 
+This filter is a part of Plainsight's **HyperLabel™**, which enables accelerated/automated annotation, model retraining and deployment promotion.
+
 ### Features
 
 - **Multi-provider via LangChain** — switch providers by changing one env var (`FILTER_CHATTAG_MODEL`).
