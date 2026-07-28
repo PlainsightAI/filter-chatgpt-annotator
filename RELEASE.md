@@ -1,4 +1,12 @@
-# v0.3.2
+# v0.3.3
+
+## v0.3.3 - 2026-07-27
+
+### Added
+- `QUICKSTART.md`: copy-paste runnable path from clone to annotated frames, including a public sample video, a configurable prompt matching that clip, and the expected `meta.chattag` output.
+
+### Fixed
+- `env.example`: `VIDEO_PATH` was the placeholder `/path/to/your/video.mp4`, so the documented run could not be followed without supplying an input first. It now names a downloadable public sample.
 
 ## v0.3.2 - 2026-07-26
 
