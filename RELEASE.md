@@ -3,10 +3,11 @@
 ## v0.3.3 - 2026-07-27
 
 ### Added
-- `QUICKSTART.md`: copy-paste runnable path from clone to annotated frames, including a public sample video, a configurable prompt matching that clip, and the expected `meta.chattag` output.
+- `QUICKSTART.md`: copy-paste runnable path from clone to annotated frames. The run step is an explicit `openfilter run` invocation passing the prompt and `output_schema` on the command line, because neither `make run` nor `openfilter run` reads `.env`, and `make run` hardcodes a `data/sample-video.mp4` source that is not in the repo.
+- `prompts/vehicle_prompt.txt`, matching the sample clip the quickstart uses.
 
 ### Fixed
-- `env.example`: `VIDEO_PATH` was the placeholder `/path/to/your/video.mp4`, so the documented run could not be followed without supplying an input first. It now names a downloadable public sample.
+- `env.example`: `VIDEO_PATH` was the placeholder `/path/to/your/video.mp4`. It now documents the public sample clips and states that `FILTER_PROMPT` and `FILTER_OUTPUT_SCHEMA` are food-themed, so all three have to change together.
 
 ## v0.3.2 - 2026-07-26
 

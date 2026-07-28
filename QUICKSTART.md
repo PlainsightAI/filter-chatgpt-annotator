@@ -21,53 +21,58 @@ curl -O https://storage.googleapis.com/plainsight-ml-assets-production/videos/ca
 
 `train.mp4` is available at the same path if you prefer a different clip.
 
-## Configure
+## Install and set a credential
 
 ```bash
 make install
-cp env.example .env
+export OPENAI_API_KEY=sk-...   # or the variable matching your provider
 ```
 
-Edit `.env` and set three things:
-
-```bash
-FILTER_CHATTAG_MODEL=openai:gpt-4o-mini   # or another provider, see the table in README.md
-OPENAI_API_KEY=sk-...                     # the credential matching the model above
-VIDEO_PATH=./car_truck_person.mp4
-```
-
-The prompt is configurable and decides what gets labelled. `env.example` defaults to `./prompts/food_annotation_prompt.txt`; for the sample clip above use a prompt that asks about vehicles and people, or write your own:
-
-```bash
-cat > prompts/vehicle_prompt.txt <<'EOF'
-Look at this image and determine whether each of the following is present:
-car, truck, person.
-EOF
-
-# then in .env
-FILTER_PROMPT=./prompts/vehicle_prompt.txt
-```
-
-See [Prompt format](README.md#prompt-format) for the exact contract the model must satisfy.
+See the provider table in [README.md](README.md#pick-a-provider) for the other three.
 
 ## Run
 
+Two things decide the output: the **prompt** tells the model what to look at, and `output_schema` declares the label keys it must answer with. Both are passed explicitly below, so this command does not depend on `.env`:
+
 ```bash
-make run
+openfilter run \
+  - VideoIn \
+      --sources 'file://car_truck_person.mp4!loop' \
+      --outputs 'tcp://*:5550' \
+  - filter_chattag.filter.FilterChatTag \
+      --sources 'tcp://localhost:5550' \
+      --outputs 'tcp://*:5552' \
+      --chattag_model 'openai:gpt-4o-mini' \
+      --prompt './prompts/vehicle_prompt.txt' \
+      --output_schema '{"car":{"present":false,"confidence":0.0},"truck":{"present":false,"confidence":0.0},"person":{"present":false,"confidence":0.0}}' \
+      --mq_log pretty \
+  - Webvis \
+      --sources 'tcp://localhost:5552'
 ```
 
 Then open Webvis at http://localhost:8000.
 
+To label something else, swap the prompt file and the `output_schema` keys together — they have to agree. `prompts/` ships several examples, and [Prompt format](README.md#prompt-format) documents the contract.
+
 ## Verify it worked
 
-Each frame carries a `meta.chattag` payload with one entry per label, for example:
+Each frame carries a `meta.chattag` payload with one entry per schema key:
 
 ```json
 {"car": {"present": true, "confidence": 0.95}, "truck": {"present": false, "confidence": 0.9}}
 ```
 
-With `FILTER_SAVE_FRAMES=true` the annotated frames and a `labels.jsonl` land under `FILTER_OUTPUT_DIR` (default `./output_frames`). One line per frame in `labels.jsonl` means the pipeline ran end to end.
+`--mq_log pretty` prints it per frame, so the first frames appearing in the terminal mean the pipeline ran end to end.
 
 ## Without an API key
 
-Set `FILTER_NO_OPS=true` to run the whole pipeline with the model call skipped. Useful to confirm wiring before spending tokens.
+Add `--no_ops true` to the `FilterChatTag` stage to run the whole pipeline with the model call skipped. Useful to confirm wiring before spending tokens.
+
+## Running from `.env` instead
+
+The `scripts/filter_*.py` entry points call `load_dotenv()`, so they do read `.env`, unlike `make run` and `openfilter run`. Note each script hardcodes its own `output_schema`, so use one whose schema matches your prompt:
+
+```bash
+cp env.example .env      # set VIDEO_PATH, FILTER_PROMPT and the credential
+python scripts/filter_food_annotation.py
+```
