@@ -11,7 +11,7 @@ ChatTag filter release notes
 - Grant `id-token: write` in `create-release.yaml` so the public release workflow can produce a keyless (cosign) SBOM attestation for the published image (once the shared SBOM steps land).
 - Fix the `RELEASE.md` header (`# Changelog` first line; a stray `# v0.3.2` H1 plus a duplicated `# Changelog`/`[Unreleased]` block broke the changelog-parser).
 - Pin the Docker base to `python:3.11.12-slim` (was `python:3.11-slim`).
-- Point the `docker-compose.yaml` utility images at `containers.openfilter.io/plainsightai/openfilter-{video-in,webvis}:1.2.1` (were `:latest`).
+- Point the `docker-compose.yaml` utility images at `containers.openfilter.io/plainsightai/openfilter-{video-in,webvis}:1.2.1`, and pin the filter's own image at `openfilter-chattag:0.3.3` (all were `:latest`).
 - Update dev-tooling floors (`setuptools>=83.0.0`) and switch dev pins to range pins.
 
 ## v0.3.2 - 2026-07-26
