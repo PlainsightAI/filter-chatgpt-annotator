@@ -1,4 +1,18 @@
-# v0.3.2
+# Changelog
+ChatTag filter release notes
+
+## [Unreleased]
+
+## v0.3.3 - 2026-08-04
+
+### Changed
+- Update `openfilter[all]` to `>=1.2.1`.
+- Dockerfile: prefer PyPI over the openfilter mirror as the primary pip index, so `publish-docker` no longer races against mirror sync immediately after `publish-to-pypi`.
+- Grant `id-token: write` in `create-release.yaml` so the public release workflow can produce a keyless (cosign) SBOM attestation for the published image (once the shared SBOM steps land).
+- Fix the `RELEASE.md` header (`# Changelog` first line; a stray `# v0.3.2` H1 plus a duplicated `# Changelog`/`[Unreleased]` block broke the changelog-parser).
+- Pin the Docker base to `python:3.11.12-slim` (was `python:3.11-slim`).
+- Point the `docker-compose.yaml` utility images at `containers.openfilter.io/plainsightai/openfilter-{video-in,webvis}:1.2.1`, and pin the filter's own image at `openfilter-chattag:0.3.3` (all were `:latest`).
+- Update dev-tooling floors (`setuptools>=83.0.0`) and switch dev pins to range pins.
 
 ## v0.3.2 - 2026-07-26
 
@@ -34,23 +48,8 @@
 ## v0.2.3 - 2026-04-23
 
 ### Changed
-- Bump openfilter SDK, align CI workflow with shared release gate (source-paths)
+- Update the openfilter dependency to `>=0.1.30`, and align the CI workflow with the shared release gate (source-paths).
 - Fix release workflow secret names: `PYPI_API_TOKEN` → `PLAINSIGHT_PYPI_TOKEN`, `DOCKERHUB_TOKEN` → `DOCKERHUB_ACCESS_TOKEN` (org-level secret names). Without this the PyPI / Docker Hub tokens resolved to empty and no package has been published since the migration.
-- Bump openfilter dependency to `>=0.1.30`.
-
-# Changelog
-ChatTag filter release notes
-
-## [Unreleased]
-
-### Changed
-
-- Bump openfilter to 1.1.0
-- Dockerfile: prefer PyPI over the openfilter mirror as the primary pip index, so `publish-docker` no longer races against mirror sync immediately after `publish-to-pypi`.
-- Bump openfilter to 1.1.1
-- Bump openfilter to 1.1.2
-- Bump the openfilter dependency to 1.2.0
-- Bump the openfilter dependency to 1.2.1
 
 ## v0.2.2 - 2026-04-20
 
@@ -63,7 +62,7 @@ ChatTag filter release notes
 
 ### Changed
 - Add CI/CD workflows: create-release.yaml (Docker Hub publishing), ci.yaml (PR testing), security-scan.yaml (Grype)
-- Bump openfilter dependency to >=0.1.27
+- Update openfilter dependency to >=0.1.27
 - Extend Python support to 3.13
 - Update docker-compose.yaml image tags to 0.1.27
 - Update Makefile IMAGE to Docker Hub path
