@@ -10,7 +10,7 @@ services:
       - ./data/sample-video.mp4:/video.mp4
 
   chattag_filter:
-    image: containers.openfilter.io/plainsightai/openfilter-chattag:0.3.3
+    image: containers.openfilter.io/plainsightai/openfilter-chattag:0.3.4
     environment:
       LOG_LEVEL: ${LOG_LEVEL}
       FILTER_ID: ChatTagFilter

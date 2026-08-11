@@ -3,10 +3,12 @@ ChatTag filter release notes
 
 ## [Unreleased]
 
+## v0.3.4 - 2026-08-10
+
 ### Changed
 
 - Build the image on `openfilter-base` (weekly apt-upgraded python-slim) instead of a stale `python:X.Y.Z-slim` pin, clearing the OS-package CVEs the pin carried.
-- Bump the openfilter dependency to 1.2.2
+- Update the openfilter dependency to 1.2.2
 
 ## v0.3.3 - 2026-08-04
 
@@ -62,7 +64,6 @@ ChatTag filter release notes
 - Remove redundant ci.yaml (shared workflow handles PR testing)
 - Add push + pull_request triggers to create-release.yaml
 
-
 ## v0.2.1 - 2026-04-14
 
 ### Changed
@@ -71,7 +72,6 @@ ChatTag filter release notes
 - Extend Python support to 3.13
 - Update docker-compose.yaml image tags to 0.1.27
 - Update Makefile IMAGE to Docker Hub path
-
 
 ## v0.2.0 - 2026-04-02
 
