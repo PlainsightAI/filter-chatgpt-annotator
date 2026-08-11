@@ -5,6 +5,7 @@ ChatTag filter release notes
 
 ### Changed
 
+- Build the image on `openfilter-base` (weekly apt-upgraded python-slim) instead of a stale `python:X.Y.Z-slim` pin, clearing the OS-package CVEs the pin carried.
 - Bump the openfilter dependency to 1.2.2
 
 ## v0.3.3 - 2026-08-04
