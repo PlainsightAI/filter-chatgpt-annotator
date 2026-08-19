@@ -1,0 +1,8 @@
+Look at this image and determine whether each of the following is present:
+
+- car
+- truck
+- person
+
+Answer only about these three. For each one, report whether it is present and
+how confident you are, as a number between 0.0 and 1.0.

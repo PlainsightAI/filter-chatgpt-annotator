@@ -23,12 +23,30 @@ This filter is a part of Plainsight's **HyperLabel™**, which enables accelerat
 
 ## Quick start
 
+See **[QUICKSTART.md](QUICKSTART.md)** for the runnable path from clone to
+annotated frames.
+
+The short version, which passes the prompt and the schema explicitly because
+neither `make run` nor `openfilter run` reads `.env`:
+
 ```bash
 make install
-cp env.example .env
-# Edit .env: pick a provider + set the credential
-make run
+export OPENAI_API_KEY=sk-...          # or the variable matching your provider
+curl -O https://storage.googleapis.com/plainsight-ml-assets-production/videos/car_truck_person.mp4
+
+openfilter run \
+  - VideoIn --sources 'file://car_truck_person.mp4!loop' --outputs 'tcp://*:5550' \
+  - filter_chattag.filter.FilterChatTag \
+      --sources 'tcp://localhost:5550' --outputs 'tcp://*:5552' \
+      --chattag_model 'openai:gpt-4o-mini' \
+      --prompt './prompts/vehicle_prompt.txt' \
+      --output_schema '{"car":{"present":false,"confidence":0.0},"truck":{"present":false,"confidence":0.0},"person":{"present":false,"confidence":0.0}}' \
+  - Webvis --sources 'tcp://localhost:5552'
 ```
+
+`make run` is not the quick start: it expands a hardcoded pipeline whose source is
+`data/sample-video.mp4`, which is not in this repo, and it hardcodes a salad prompt
+and schema.
 
 ### Pick a provider
 
@@ -232,6 +250,7 @@ The offline test suite mocks LangChain and never hits a real provider. Integrati
 
 ## Documentation
 
+- [Quick start](QUICKSTART.md)
 - [Output contract](docs/output_contract.md)
 - [Usage guide](docs/filter_usage_guide.md)
 - [Usage examples](docs/usage_examples.md)
