@@ -56,11 +56,25 @@ To label something else, swap the prompt file and the `output_schema` keys toget
 
 ## Verify it worked
 
-Each frame carries a `meta.chattag` payload with one entry per schema key:
+Each frame carries a `meta.chattag` payload. The per-label entries sit under
+`annotations`, one per schema key, alongside the model and usage fields:
 
 ```json
-{"car": {"present": true, "confidence": 0.95}, "truck": {"present": false, "confidence": 0.9}}
+{
+  "schema_version": 1,
+  "annotations": {
+    "car": {"present": true, "confidence": 0.95},
+    "truck": {"present": false, "confidence": 0.9},
+    "person": {"present": true, "confidence": 0.88}
+  },
+  "usage": {"total_tokens": 412},
+  "model": "openai:gpt-4o-mini",
+  "processing_time": 1.31,
+  "frame_id": 0
+}
 ```
+
+Three entries, because the `output_schema` above declares three keys.
 
 `--mq_log pretty` prints it per frame, so the first frames appearing in the terminal mean the pipeline ran end to end.
 
@@ -70,9 +84,17 @@ Add `--no_ops true` to the `FilterChatTag` stage to run the whole pipeline with 
 
 ## Running from `.env` instead
 
-The `scripts/filter_*.py` entry points call `load_dotenv()`, so they do read `.env`, unlike `make run` and `openfilter run`. Note each script hardcodes its own `output_schema`, so use one whose schema matches your prompt:
+The `scripts/filter_*.py` entry points call `load_dotenv()`, so they do read `.env`, unlike `make run` and `openfilter run`.
+
+The script's own `output_schema` is a default, not the final word: `normalize_config` reads `FILTER_OUTPUT_SCHEMA` from the environment and overrides it (`filter_chattag/filter.py`). Since `env.example` sets that variable, a reader who copies it runs with the `.env` schema whatever script they pick. So set the schema next to the prompt, and keep the two in agreement:
 
 ```bash
-cp env.example .env      # set VIDEO_PATH, FILTER_PROMPT and the credential
+cp env.example .env      # then edit it:
+#   VIDEO_PATH=./car_truck_person.mp4
+#   FILTER_PROMPT=./prompts/vehicle_prompt.txt
+#   FILTER_OUTPUT_SCHEMA={"car":{"present":false,"confidence":0.0},"truck":{"present":false,"confidence":0.0},"person":{"present":false,"confidence":0.0}}
+#   OPENAI_API_KEY=sk-...
 python scripts/filter_food_annotation.py
 ```
+
+The script name does not constrain the labels, since both the prompt and the schema come from `.env`.
