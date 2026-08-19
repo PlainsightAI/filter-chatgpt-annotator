@@ -1,13 +1,37 @@
-# v0.3.3
+# Changelog
+ChatTag filter release notes
 
-## v0.3.3 - 2026-07-27
+## [Unreleased]
+
+### Changed
+
+- Bump the openfilter dependency to 1.3.0
 
 ### Added
 - `QUICKSTART.md`: copy-paste runnable path from clone to annotated frames. The run step is an explicit `openfilter run` invocation passing the prompt and `output_schema` on the command line, because neither `make run` nor `openfilter run` reads `.env`, and `make run` hardcodes a `data/sample-video.mp4` source that is not in the repo.
 - `prompts/vehicle_prompt.txt`, matching the sample clip the quickstart uses.
 
 ### Fixed
-- `env.example`: `VIDEO_PATH` was the placeholder `/path/to/your/video.mp4`. It now documents the public sample clips and states that `FILTER_PROMPT` and `FILTER_OUTPUT_SCHEMA` are food-themed, so all three have to change together.
+- `env.example`: `VIDEO_PATH` was the placeholder `/path/to/your/video.mp4`, and `FILTER_PROMPT` / `FILTER_OUTPUT_SCHEMA` defaulted to food on a file nobody has. All three now default to the vehicle sample `QUICKSTART.md` downloads, so a fresh copy runs as-is, with the constraint that they have to change together stated in the file.
+- `README.md`: the Quick start section documented `make install` / `cp env.example .env` / `make run`, which cannot work: `make run` expands a hardcoded pipeline sourcing `data/sample-video.mp4`, absent from the repo, hardcodes a salad prompt and schema, and does not read `.env`. It now points at `QUICKSTART.md` and carries the same explicit `openfilter run` invocation. `QUICKSTART.md` is also listed under Documentation, where five docs were listed and it was not.
+
+## v0.3.4 - 2026-08-10
+
+### Changed
+
+- Build the image on `openfilter-base` (weekly apt-upgraded python-slim) instead of a stale `python:X.Y.Z-slim` pin, clearing the OS-package CVEs the pin carried.
+- Update the openfilter dependency to 1.2.2
+
+## v0.3.3 - 2026-08-04
+
+### Changed
+- Update `openfilter[all]` to `>=1.2.1`.
+- Dockerfile: prefer PyPI over the openfilter mirror as the primary pip index, so `publish-docker` no longer races against mirror sync immediately after `publish-to-pypi`.
+- Grant `id-token: write` in `create-release.yaml` so the public release workflow can produce a keyless (cosign) SBOM attestation for the published image (once the shared SBOM steps land).
+- Fix the `RELEASE.md` header (`# Changelog` first line; a stray `# v0.3.2` H1 plus a duplicated `# Changelog`/`[Unreleased]` block broke the changelog-parser).
+- Pin the Docker base to `python:3.11.12-slim` (was `python:3.11-slim`).
+- Point the `docker-compose.yaml` utility images at `containers.openfilter.io/plainsightai/openfilter-{video-in,webvis}:1.2.1`, and pin the filter's own image at `openfilter-chattag:0.3.3` (all were `:latest`).
+- Update dev-tooling floors (`setuptools>=83.0.0`) and switch dev pins to range pins.
 
 ## v0.3.2 - 2026-07-26
 
@@ -43,21 +67,8 @@
 ## v0.2.3 - 2026-04-23
 
 ### Changed
-- Bump openfilter SDK, align CI workflow with shared release gate (source-paths)
+- Update the openfilter dependency to `>=0.1.30`, and align the CI workflow with the shared release gate (source-paths).
 - Fix release workflow secret names: `PYPI_API_TOKEN` → `PLAINSIGHT_PYPI_TOKEN`, `DOCKERHUB_TOKEN` → `DOCKERHUB_ACCESS_TOKEN` (org-level secret names). Without this the PyPI / Docker Hub tokens resolved to empty and no package has been published since the migration.
-- Bump openfilter dependency to `>=0.1.30`.
-
-# Changelog
-ChatTag filter release notes
-
-## [Unreleased]
-
-### Changed
-
-- Bump openfilter to 1.1.0
-- Dockerfile: prefer PyPI over the openfilter mirror as the primary pip index, so `publish-docker` no longer races against mirror sync immediately after `publish-to-pypi`.
-- Bump openfilter to 1.1.1
-- Bump openfilter to 1.1.2
 
 ## v0.2.2 - 2026-04-20
 
@@ -65,16 +76,14 @@ ChatTag filter release notes
 - Remove redundant ci.yaml (shared workflow handles PR testing)
 - Add push + pull_request triggers to create-release.yaml
 
-
 ## v0.2.1 - 2026-04-14
 
 ### Changed
 - Add CI/CD workflows: create-release.yaml (Docker Hub publishing), ci.yaml (PR testing), security-scan.yaml (Grype)
-- Bump openfilter dependency to >=0.1.27
+- Update openfilter dependency to >=0.1.27
 - Extend Python support to 3.13
 - Update docker-compose.yaml image tags to 0.1.27
 - Update Makefile IMAGE to Docker Hub path
-
 
 ## v0.2.0 - 2026-04-02
 

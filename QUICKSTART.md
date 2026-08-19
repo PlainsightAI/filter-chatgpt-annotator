@@ -70,6 +70,7 @@ Each frame carries a `meta.chattag` payload. The per-label entries sit under
   "usage": {"total_tokens": 412},
   "model": "openai:gpt-4o-mini",
   "processing_time": 1.31,
+  "timestamp": 1787097600.42,
   "frame_id": 0
 }
 ```

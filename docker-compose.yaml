@@ -1,6 +1,6 @@
 services:
   video_in:
-    image: containers.openfilter.io/plainsightai/openfilter-video-in:latest
+    image: containers.openfilter.io/plainsightai/openfilter-video-in:1.2.1
     environment:
       LOG_LEVEL: ${LOG_LEVEL}
       FILTER_ID: VideoIn
@@ -10,7 +10,7 @@ services:
       - ./data/sample-video.mp4:/video.mp4
 
   chattag_filter:
-    image: containers.openfilter.io/plainsightai/openfilter-chattag:latest
+    image: containers.openfilter.io/plainsightai/openfilter-chattag:0.3.4
     environment:
       LOG_LEVEL: ${LOG_LEVEL}
       FILTER_ID: ChatTagFilter
@@ -25,7 +25,7 @@ services:
       - ./prompts/simple_salad_prompt.txt:/simple_salad_prompt.txt
 
   webvis:
-    image: containers.openfilter.io/plainsightai/openfilter-webvis:latest
+    image: containers.openfilter.io/plainsightai/openfilter-webvis:1.2.1
     environment:
       LOG_LEVEL: ${LOG_LEVEL}
       FILTER_ID: Webvis
