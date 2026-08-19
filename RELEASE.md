@@ -3,15 +3,17 @@ ChatTag filter release notes
 
 ## [Unreleased]
 
+### Added
+
+- `QUICKSTART.md`: copy-paste runnable path from clone to annotated frames. The run step is an explicit `openfilter run` invocation passing the prompt and `output_schema` on the command line, because neither `make run` nor `openfilter run` reads `.env`, and `make run` hardcodes a `data/sample-video.mp4` source that is not in the repo.
+- `prompts/vehicle_prompt.txt`, matching the sample clip the quickstart uses.
+
 ### Changed
 
 - Bump the openfilter dependency to 1.3.0
 
-### Added
-- `QUICKSTART.md`: copy-paste runnable path from clone to annotated frames. The run step is an explicit `openfilter run` invocation passing the prompt and `output_schema` on the command line, because neither `make run` nor `openfilter run` reads `.env`, and `make run` hardcodes a `data/sample-video.mp4` source that is not in the repo.
-- `prompts/vehicle_prompt.txt`, matching the sample clip the quickstart uses.
-
 ### Fixed
+
 - `env.example`: `VIDEO_PATH` was the placeholder `/path/to/your/video.mp4`, and `FILTER_PROMPT` / `FILTER_OUTPUT_SCHEMA` defaulted to food on a file nobody has. All three now default to the vehicle sample `QUICKSTART.md` downloads, so a fresh copy runs as-is, with the constraint that they have to change together stated in the file.
 - `README.md`: the Quick start section documented `make install` / `cp env.example .env` / `make run`, which cannot work: `make run` expands a hardcoded pipeline sourcing `data/sample-video.mp4`, absent from the repo, hardcodes a salad prompt and schema, and does not read `.env`. It now points at `QUICKSTART.md` and carries the same explicit `openfilter run` invocation. `QUICKSTART.md` is also listed under Documentation, where five docs were listed and it was not.
 

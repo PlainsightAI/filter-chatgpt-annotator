@@ -8,7 +8,7 @@ Pipeline contract: `VideoIn → FilterChatTag → Webvis`
 
 ## Prerequisites
 
-- Python 3.10+ and a virtualenv
+- Python 3.10-3.13 and a virtualenv
 - An API key for one provider (OpenAI, Google Gemini, Anthropic, or a local Ollama)
 
 ## Get a sample video
@@ -61,13 +61,13 @@ Each frame carries a `meta.chattag` payload. The per-label entries sit under
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": "1.0",
   "annotations": {
     "car": {"present": true, "confidence": 0.95},
     "truck": {"present": false, "confidence": 0.9},
     "person": {"present": true, "confidence": 0.88}
   },
-  "usage": {"total_tokens": 412},
+  "usage": {"input_tokens": 389, "output_tokens": 23, "total_tokens": 412},
   "model": "openai:gpt-4o-mini",
   "processing_time": 1.31,
   "timestamp": 1787097600.42,
@@ -90,11 +90,7 @@ The `scripts/filter_*.py` entry points call `load_dotenv()`, so they do read `.e
 The script's own `output_schema` is a default, not the final word: `normalize_config` reads `FILTER_OUTPUT_SCHEMA` from the environment and overrides it (`filter_chattag/filter.py`). Since `env.example` sets that variable, a reader who copies it runs with the `.env` schema whatever script they pick. So set the schema next to the prompt, and keep the two in agreement:
 
 ```bash
-cp env.example .env      # then edit it:
-#   VIDEO_PATH=./car_truck_person.mp4
-#   FILTER_PROMPT=./prompts/vehicle_prompt.txt
-#   FILTER_OUTPUT_SCHEMA={"car":{"present":false,"confidence":0.0},"truck":{"present":false,"confidence":0.0},"person":{"present":false,"confidence":0.0}}
-#   OPENAI_API_KEY=sk-...
+cp env.example .env      # then set your credential, e.g. OPENAI_API_KEY=sk-...
 python scripts/filter_food_annotation.py
 ```
 
