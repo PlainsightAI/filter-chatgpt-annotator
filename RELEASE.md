@@ -3,6 +3,8 @@ ChatTag filter release notes
 
 ## [Unreleased]
 
+## v0.3.5 - 2026-08-18
+
 ### Added
 
 - `QUICKSTART.md`: copy-paste runnable path from clone to annotated frames. The run step is an explicit `openfilter run` invocation passing the prompt and `output_schema` on the command line, because neither `make run` nor `openfilter run` reads `.env`, and `make run` hardcodes a `data/sample-video.mp4` source that is not in the repo.
@@ -10,7 +12,8 @@ ChatTag filter release notes
 
 ### Changed
 
-- Bump the openfilter dependency to 1.3.0
+- Update the openfilter dependency to 1.3.0
+- Add Python 3.14 support: raise the `requires-python` ceiling to `<3.15`; the CI test matrix now runs 3.10–3.14.
 
 ### Fixed
 
