@@ -2,6 +2,7 @@
 title: ChatTag
 sidebar_label: Overview
 sidebar_position: 1
+slug: /filters/chattag/overview
 ---
 
 `FilterChatTag` is a LangChain-backed OpenFilter for multimodal vision annotation. It sends each video/image frame to a configurable chat model (OpenAI, Gemini, Claude, Ollama, or any other LangChain-compatible vision model) and attaches structured `{present, confidence}` annotations to the frame metadata.
