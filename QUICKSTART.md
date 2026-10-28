@@ -8,7 +8,7 @@ Pipeline contract: `VideoIn → FilterChatTag → Webvis`
 
 ## Prerequisites
 
-- Python 3.10-3.13 and a virtualenv
+- Python 3.11-3.14 and a virtualenv
 - An API key for one provider (OpenAI, Google Gemini, Anthropic, or a local Ollama)
 
 ## Get a sample video
